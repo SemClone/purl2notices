@@ -9,9 +9,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 from packageurl import PackageURL
-from semantic_copycat_purl2src import purl2src
-from semantic_copycat_upmex import upmex
-from semantic_copycat_oslili import oslili
+
+# Import semantic-copycat libraries with fallback
+try:
+    from semantic_copycat_purl2src import purl2src
+except ImportError:
+    purl2src = None
+
+try:
+    from semantic_copycat_upmex import upmex
+except ImportError:
+    upmex = None
+
+try:
+    from semantic_copycat_oslili import oslili
+except ImportError:
+    oslili = None
 
 from .models import Package, License, Copyright, ProcessingStatus
 from .config import Config
@@ -180,6 +193,9 @@ class Purl2Notices:
     
     async def _get_download_url(self, purl_string: str) -> Optional[str]:
         """Get download URL for a PURL using purl2src."""
+        if not purl2src:
+            self.error_log.append("purl2src library not available")
+            return None
         try:
             result = purl2src.get_download_url(purl_string)
             return result.get("url") if result else None
@@ -213,6 +229,9 @@ class Purl2Notices:
     
     async def _extract_metadata_upmex(self, package_path: Path) -> Dict[str, Any]:
         """Extract metadata using upmex."""
+        if not upmex:
+            self.error_log.append("upmex library not available")
+            return {}
         try:
             return upmex.extract(str(package_path))
         except Exception as e:
@@ -221,6 +240,9 @@ class Purl2Notices:
     
     async def _extract_metadata_oslili(self, package_path: Path) -> Dict[str, Any]:
         """Extract metadata using oslili."""
+        if not oslili:
+            self.error_log.append("oslili library not available")
+            return {}
         try:
             return oslili.extract(str(package_path))
         except Exception as e:
@@ -292,6 +314,9 @@ class Purl2Notices:
     
     def _process_with_oslili_only(self, path: Path) -> Optional[Package]:
         """Process a path using only OSLILI (for unidentified packages)."""
+        if not oslili:
+            self.error_log.append("oslili library not available")
+            return None
         try:
             oslili_data = oslili.extract(str(path))
             
