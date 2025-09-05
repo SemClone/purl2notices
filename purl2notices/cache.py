@@ -1,0 +1,246 @@
+"""Cache management using CycloneDX format."""
+
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+
+from .models import Package, License, Copyright, ProcessingStatus
+
+
+class CacheManager:
+    """Manage cache in CycloneDX format."""
+    
+    CYCLONEDX_VERSION = "1.6"
+    SPEC_VERSION = "1.6"
+    
+    def __init__(self, cache_file: Path):
+        """Initialize cache manager."""
+        self.cache_file = cache_file
+        self.bom_ref = str(uuid.uuid4())
+    
+    def load(self) -> List[Package]:
+        """Load packages from cache."""
+        if not self.cache_file.exists():
+            return []
+        
+        try:
+            with open(self.cache_file, 'r') as f:
+                data = json.load(f)
+            
+            if data.get('bomFormat') != 'CycloneDX':
+                raise ValueError("Invalid cache format: not a CycloneDX BOM")
+            
+            return self._parse_cyclonedx(data)
+        except Exception as e:
+            print(f"Warning: Failed to load cache: {e}")
+            return []
+    
+    def save(self, packages: List[Package]) -> None:
+        """Save packages to cache."""
+        try:
+            bom = self._create_cyclonedx(packages)
+            
+            # Ensure directory exists
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(self.cache_file, 'w') as f:
+                json.dump(bom, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save cache: {e}")
+    
+    def merge(self, packages: List[Package]) -> List[Package]:
+        """Merge new packages with cached ones."""
+        cached = self.load()
+        
+        # Create a map of cached packages by PURL/display_name
+        cache_map = {pkg.display_name: pkg for pkg in cached}
+        
+        # Merge with preference for new data
+        for pkg in packages:
+            cache_map[pkg.display_name] = pkg
+        
+        return list(cache_map.values())
+    
+    def _create_cyclonedx(self, packages: List[Package]) -> Dict[str, Any]:
+        """Create CycloneDX BOM from packages."""
+        components = []
+        
+        for pkg in packages:
+            component = {
+                "type": "library",
+                "bom-ref": str(uuid.uuid4()),
+                "name": pkg.name or "unknown",
+            }
+            
+            if pkg.version:
+                component["version"] = pkg.version
+            
+            if pkg.purl:
+                component["purl"] = pkg.purl
+            
+            # Add licenses
+            if pkg.licenses:
+                component["licenses"] = []
+                for lic in pkg.licenses:
+                    license_obj = {}
+                    if lic.spdx_id and lic.spdx_id != "NOASSERTION":
+                        license_obj["license"] = {"id": lic.spdx_id}
+                    else:
+                        license_obj["license"] = {"name": lic.name}
+                    component["licenses"].append(license_obj)
+            
+            # Add copyright as property
+            if pkg.copyrights:
+                if "properties" not in component:
+                    component["properties"] = []
+                
+                for copyright in pkg.copyrights:
+                    component["properties"].append({
+                        "name": "copyright",
+                        "value": copyright.statement
+                    })
+            
+            # Add custom properties for our needs
+            if "properties" not in component:
+                component["properties"] = []
+            
+            # Add status
+            component["properties"].append({
+                "name": "purl2notices:status",
+                "value": pkg.status.value
+            })
+            
+            # Add source path if available
+            if pkg.source_path:
+                component["properties"].append({
+                    "name": "purl2notices:source_path",
+                    "value": pkg.source_path
+                })
+            
+            # Add error message if any
+            if pkg.error_message:
+                component["properties"].append({
+                    "name": "purl2notices:error",
+                    "value": pkg.error_message
+                })
+            
+            # Store license texts separately
+            for lic in pkg.licenses:
+                if lic.text:
+                    component["properties"].append({
+                        "name": f"purl2notices:license_text:{lic.spdx_id}",
+                        "value": lic.text
+                    })
+            
+            components.append(component)
+        
+        # Create the BOM
+        bom = {
+            "bomFormat": "CycloneDX",
+            "specVersion": self.SPEC_VERSION,
+            "serialNumber": f"urn:uuid:{self.bom_ref}",
+            "version": 1,
+            "metadata": {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "tools": [
+                    {
+                        "vendor": "oscarvalenzuelab",
+                        "name": "purl2notices",
+                        "version": "0.1.0"
+                    }
+                ],
+                "properties": [
+                    {
+                        "name": "purl2notices:cache_version",
+                        "value": "1.0"
+                    }
+                ]
+            },
+            "components": components
+        }
+        
+        return bom
+    
+    def _parse_cyclonedx(self, data: Dict[str, Any]) -> List[Package]:
+        """Parse CycloneDX BOM to packages."""
+        packages = []
+        
+        for component in data.get("components", []):
+            pkg = Package(
+                purl=component.get("purl"),
+                name=component.get("name", ""),
+                version=component.get("version", "")
+            )
+            
+            # Extract type from PURL if available
+            if pkg.purl and pkg.purl.startswith("pkg:"):
+                pkg.type = pkg.purl.split("/")[0].replace("pkg:", "")
+            
+            # Parse licenses
+            for lic_obj in component.get("licenses", []):
+                license_data = lic_obj.get("license", {})
+                
+                spdx_id = license_data.get("id", "")
+                name = license_data.get("name", "")
+                
+                if spdx_id or name:
+                    license = License(
+                        spdx_id=spdx_id or "NOASSERTION",
+                        name=name or spdx_id,
+                        text="",  # Will be loaded from properties
+                        source="cache"
+                    )
+                    pkg.licenses.append(license)
+            
+            # Parse properties
+            for prop in component.get("properties", []):
+                prop_name = prop.get("name", "")
+                prop_value = prop.get("value", "")
+                
+                if prop_name == "copyright":
+                    pkg.copyrights.append(Copyright(statement=prop_value))
+                elif prop_name == "purl2notices:status":
+                    try:
+                        pkg.status = ProcessingStatus(prop_value)
+                    except ValueError:
+                        pkg.status = ProcessingStatus.SUCCESS
+                elif prop_name == "purl2notices:source_path":
+                    pkg.source_path = prop_value
+                elif prop_name == "purl2notices:error":
+                    pkg.error_message = prop_value
+                elif prop_name.startswith("purl2notices:license_text:"):
+                    # Match license text to license
+                    spdx_id = prop_name.replace("purl2notices:license_text:", "")
+                    for lic in pkg.licenses:
+                        if lic.spdx_id == spdx_id:
+                            lic.text = prop_value
+                            break
+            
+            packages.append(pkg)
+        
+        return packages
+    
+    def validate(self) -> bool:
+        """Validate cache file structure."""
+        if not self.cache_file.exists():
+            return False
+        
+        try:
+            with open(self.cache_file, 'r') as f:
+                data = json.load(f)
+            
+            # Check required fields
+            if data.get('bomFormat') != 'CycloneDX':
+                return False
+            
+            if 'specVersion' not in data:
+                return False
+            
+            if 'components' not in data:
+                return False
+            
+            return True
+        except Exception:
+            return False

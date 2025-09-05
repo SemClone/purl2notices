@@ -1,0 +1,64 @@
+================================================================================
+LEGAL NOTICES
+================================================================================
+
+This product includes software developed by third parties. The following 
+notices apply to the included packages:
+
+{% if group_by_license %}
+{% for license_id, package_group in packages_by_license.items() %}
+================================================================================
+{{ license_id }}
+================================================================================
+
+Packages:
+{% for package in package_group %}
+  - {{ package.display_name }}
+{% endfor %}
+
+{% if include_copyright %}
+Copyright Notices:
+{% for package in package_group %}
+{% for copyright in package.copyrights %}
+  {{ copyright.statement }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% if include_license_text %}
+License Text:
+--------------------------------------------------------------------------------
+{{ license_texts.get(license_id, 'License text not available') }}
+--------------------------------------------------------------------------------
+{% endif %}
+
+{% endfor %}
+{% else %}
+{% for package in packages %}
+================================================================================
+Package: {{ package.display_name }}
+License: {{ ', '.join(package.license_ids) if package.license_ids else 'NOASSERTION' }}
+================================================================================
+
+{% if include_copyright and package.copyrights %}
+Copyright Notices:
+{% for copyright in package.copyrights %}
+  {{ copyright.statement }}
+{% endfor %}
+{% endif %}
+
+{% if include_license_text %}
+{% for license in package.licenses %}
+{{ license.spdx_id }} License Text:
+--------------------------------------------------------------------------------
+{{ license.text if license.text else 'License text not available' }}
+--------------------------------------------------------------------------------
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+================================================================================
+END OF LEGAL NOTICES
+================================================================================

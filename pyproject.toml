@@ -1,0 +1,147 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semantic-copycat-purl2notices"
+version = "0.1.0"
+description = "Generate legal notices (attribution to authors and copyrights) for software packages"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Oscar Valenzuela B", email = "oscar.valenzuela.b@gmail.com"}
+]
+keywords = [
+    "sbom",
+    "license",
+    "copyright",
+    "attribution",
+    "purl",
+    "package-url",
+    "legal-notices",
+    "compliance"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Software Distribution"
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "jinja2>=3.0.0",
+    "aiohttp>=3.8.0",
+    "aiofiles>=0.8.0",
+    "packageurl-python>=0.11.0",
+    "semantic-copycat-purl2src>=0.1.0",
+    "semantic-copycat-upmex>=0.1.0",
+    "semantic-copycat-oslili>=0.1.0",
+    "pyyaml>=6.0",
+    "python-magic>=0.4.27",
+    "tqdm>=4.65.0",
+    "jsonschema>=4.17.0",
+    "platformdirs>=3.0.0",
+    "tomli>=2.0.0; python_version < '3.11'",
+    "requests>=2.28.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "types-aiofiles",
+    "types-pyyaml",
+    "types-tqdm",
+    "build>=0.10.0",
+    "twine>=4.0.0"
+]
+
+[project.scripts]
+purl2notices = "purl2notices.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices"
+Repository = "https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices"
+Issues = "https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices/issues"
+
+[tool.setuptools]
+packages = ["purl2notices"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+purl2notices = [
+    "templates/*.j2",
+    "templates/*.txt",
+    "data/licenses/*.json",
+    "data/licenses/*.txt",
+    "config/*.yaml"
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_unimported = false
+no_implicit_optional = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["purl2notices"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
