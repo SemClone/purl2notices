@@ -262,11 +262,16 @@ purl2notices scan DIRECTORY [OPTIONS]
 
 #### `cache` - Work with cache
 ```bash
-purl2notices cache [SUBCOMMAND] [OPTIONS]
-  edit              Open cache in editor
-  validate          Validate cache file
-  merge             Merge multiple caches
-  export            Export cache to notices
+# Generate legal notices from cache (CycloneDX JSON SBOM)
+purl2notices cache [OPTIONS]
+  --cache, -c       Cache file path (CycloneDX JSON)
+  --output, -o      Output file (legal notices)
+  --format, -f      Output format (text|html)
+  
+# Subcommands for cache management  
+purl2notices cache edit      # Open cache in editor
+purl2notices cache validate  # Validate cache structure
+purl2notices cache merge     # Merge multiple cache files
 ```
 
 ## Configuration File
@@ -292,13 +297,14 @@ scanning:
     - .whl
     
 output:
-  format: html
+  format: html  # Legal notices output format (text|html)
   template: custom_template.j2
   group_by_license: true
   
 cache:
   enabled: true
-  location: ".purl2notices_cache"
+  location: ".purl2notices.cache.json"  # CycloneDX JSON SBOM (intermediate storage)
+  auto_mode: true  # Auto-detect cache mode when no input provided
   ttl: 86400  # 24 hours
 ```
 
