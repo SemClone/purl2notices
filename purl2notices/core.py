@@ -1,52 +1,62 @@
 """Core processing logic for purl2notices."""
 
 import asyncio
-import aiohttp
-import json
+import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Optional, Dict, Any
+
 from tqdm import tqdm
-
-from packageurl import PackageURL
-
-# Import semantic-copycat libraries with fallback
-try:
-    from semantic_copycat_purl2src import purl2src
-except ImportError:
-    purl2src = None
-
-try:
-    from semantic_copycat_upmex import upmex
-except ImportError:
-    upmex = None
-
-try:
-    from semantic_copycat_oslili import oslili
-except ImportError:
-    oslili = None
 
 from .models import Package, License, Copyright, ProcessingStatus
 from .config import Config
 from .validators import PurlValidator, FileValidator
-from .scanner import PackageScanner
 from .cache import CacheManager
 from .formatter import NoticeFormatter
+from .detectors import DetectorRegistry, DetectorResult
+from .extractors import CombinedExtractor, ExtractionResult
+
+
+logger = logging.getLogger(__name__)
 
 
 class Purl2Notices:
-    """Main processor for generating legal notices."""
+    """Main processor for generating legal notices from package URLs."""
     
     def __init__(self, config: Optional[Config] = None):
         """Initialize processor."""
         self.config = config or Config()
-        self.scanner = PackageScanner(self.config)
+        
+        # Initialize components
+        self.detector_registry = DetectorRegistry()
+        self.extractor = CombinedExtractor(
+            cache_dir=self.config.cache_dir / "downloads"
+        )
         self.cache_manager = None
         self.formatter = NoticeFormatter()
         self.error_log = []
+        
+        # Set up logging
+        self._setup_logging()
+    
+    def _setup_logging(self):
+        """Set up logging configuration."""
+        log_level = logging.WARNING
+        verbose = self.config.get("general.verbose", 0)
+        
+        if verbose == 1:
+            log_level = logging.INFO
+        elif verbose >= 2:
+            log_level = logging.DEBUG
+        
+        logging.basicConfig(
+            level=log_level,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
     
     async def process_single_purl(self, purl_string: str) -> Package:
         """Process a single PURL."""
+        logger.info(f"Processing PURL: {purl_string}")
+        
         # Validate PURL
         is_valid, error, parsed_purl = PurlValidator.validate(purl_string)
         if not is_valid:
@@ -55,7 +65,7 @@ class Purl2Notices:
             self.error_log.append(f"PURL validation failed: {purl_string} - {error}")
             return package
         
-        # Create package object
+        # Create initial package
         package = Package(
             purl=purl_string,
             name=parsed_purl.name,
@@ -65,36 +75,20 @@ class Purl2Notices:
         )
         
         try:
-            # Get download URL using purl2src
-            download_url = await self._get_download_url(purl_string)
-            if not download_url:
+            # Extract information using combined extractor
+            extraction_result = await self.extractor.extract_from_purl(purl_string)
+            
+            if not extraction_result.success:
                 package.status = ProcessingStatus.UNAVAILABLE
-                package.error_message = "Could not resolve download URL"
-                self.error_log.append(f"No download URL for: {purl_string}")
+                package.error_message = "; ".join(extraction_result.errors)
+                self.error_log.extend(extraction_result.errors)
                 return package
             
-            # Download package
-            package_path = await self._download_package(download_url, parsed_purl)
-            if not package_path:
-                package.status = ProcessingStatus.UNAVAILABLE
-                package.error_message = "Could not download package"
-                self.error_log.append(f"Download failed for: {purl_string}")
-                return package
-            
-            # Extract metadata using upmex
-            metadata = await self._extract_metadata_upmex(package_path)
-            
-            # Extract additional info using oslili
-            oslili_data = await self._extract_metadata_oslili(package_path)
-            
-            # Combine results
-            package = self._combine_metadata(package, metadata, oslili_data)
-            
-            # Clean up downloaded file
-            if package_path.exists():
-                package_path.unlink()
+            # Convert extraction result to package model
+            package = self._extraction_to_package(package, extraction_result)
             
         except Exception as e:
+            logger.error(f"Processing error for {purl_string}: {e}")
             package.status = ProcessingStatus.FAILED
             package.error_message = str(e)
             self.error_log.append(f"Processing error for {purl_string}: {e}")
@@ -103,6 +97,7 @@ class Purl2Notices:
     
     async def process_batch(self, purl_list: List[str], parallel: int = 4) -> List[Package]:
         """Process multiple PURLs in parallel."""
+        logger.info(f"Processing batch of {len(purl_list)} PURLs")
         packages = []
         
         # Use semaphore to limit parallelism
@@ -112,57 +107,97 @@ class Purl2Notices:
             async with semaphore:
                 return await self.process_single_purl(purl)
         
-        # Process all PURLs
+        # Process all PURLs with progress bar
         tasks = [process_with_limit(purl) for purl in purl_list]
         
-        # Use tqdm for progress
+        # Use tqdm with asyncio.as_completed
         with tqdm(total=len(tasks), desc="Processing PURLs") as pbar:
             for coro in asyncio.as_completed(tasks):
-                package = await coro
-                packages.append(package)
+                result = await coro
+                packages.append(result)
                 pbar.update(1)
         
         return packages
     
     def process_directory(self, directory: Path) -> List[Package]:
         """Process a directory by scanning for packages."""
-        # Scan directory
-        identified_packages, unidentified_paths = self.scanner.scan_directory(
-            directory,
-            recursive=self.config.get("scanning.recursive", True),
-            max_depth=self.config.get("scanning.max_depth", 10),
-            exclude_patterns=self.config.get("scanning.exclude_patterns", [])
-        )
+        logger.info(f"Scanning directory: {directory}")
+        
+        # Detect packages in directory
+        detection_results = self.detector_registry.detect_from_directory(directory)
         
         packages = []
+        purls_to_process = []
+        paths_to_process = []
         
-        # Process identified packages (those with PURLs)
-        if identified_packages:
-            # Convert to PURLs and process
-            purl_list = [pkg.purl for pkg in identified_packages if pkg.purl]
-            if purl_list:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                processed = loop.run_until_complete(self.process_batch(purl_list))
-                packages.extend(processed)
-                loop.close()
+        # Separate detected packages by whether they have PURLs
+        for detection in detection_results:
+            if detection.purl:
+                purls_to_process.append(detection.purl)
+            else:
+                # Create package from detection
+                package = self._detection_to_package(detection)
+                if detection.metadata.get('source_file'):
+                    paths_to_process.append((Path(detection.metadata['source_file']), package))
+                else:
+                    packages.append(package)
+        
+        # Process packages with PURLs
+        if purls_to_process:
+            logger.info(f"Processing {len(purls_to_process)} detected PURLs")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-            # Add packages without PURLs
-            for pkg in identified_packages:
-                if not pkg.purl:
-                    packages.append(pkg)
+            parallel = self.config.get("general.parallel_workers", 4)
+            processed = loop.run_until_complete(
+                self.process_batch(purls_to_process, parallel)
+            )
+            packages.extend(processed)
+            loop.close()
         
-        # Process unidentified paths with OSLILI only
-        for path in unidentified_paths:
-            package = self._process_with_oslili_only(path)
-            if package:
+        # Process paths without PURLs using extractors
+        if paths_to_process:
+            logger.info(f"Processing {len(paths_to_process)} local packages")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            for path, package in paths_to_process:
+                extraction = loop.run_until_complete(
+                    self.extractor.extract_from_path(path)
+                )
+                if extraction.success:
+                    package = self._extraction_to_package(package, extraction)
                 packages.append(package)
+            
+            loop.close()
+        
+        # If no packages found at all, scan directory with oslili
+        if not packages and not detection_results:
+            logger.info("No packages detected, scanning with oslili")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            extraction = loop.run_until_complete(
+                self.extractor.oslili.extract_from_path(directory)
+            )
+            
+            if extraction.success:
+                package = Package(
+                    name=directory.name,
+                    source_path=str(directory)
+                )
+                package = self._extraction_to_package(package, extraction)
+                packages.append(package)
+            
+            loop.close()
         
         return packages
     
-    def process_cache(self, cache_file: Path) -> List[Package]:
+    def process_cache(self, cache_file: Path, override_file: Optional[Path] = None) -> List[Package]:
         """Load packages from cache file."""
-        cache_manager = CacheManager(cache_file)
+        logger.info(f"Loading from cache: {cache_file}")
+        override_file = override_file or Path("purl2notices.overrides.json")
+        cache_manager = CacheManager(cache_file, override_file)
         return cache_manager.load()
     
     def generate_notices(
@@ -175,6 +210,8 @@ class Purl2Notices:
         include_license_text: bool = True
     ) -> str:
         """Generate legal notices from packages."""
+        logger.info(f"Generating {output_format} notices for {len(packages)} packages")
+        
         # Load SPDX license texts if needed
         license_texts = {}
         if include_license_text:
@@ -191,116 +228,61 @@ class Purl2Notices:
             license_texts=license_texts
         )
     
-    async def _get_download_url(self, purl_string: str) -> Optional[str]:
-        """Get download URL for a PURL using purl2src."""
-        if not purl2src:
-            self.error_log.append("purl2src library not available")
-            return None
-        try:
-            result = purl2src.get_download_url(purl_string)
-            return result.get("url") if result else None
-        except Exception as e:
-            self.error_log.append(f"purl2src error for {purl_string}: {e}")
-            return None
+    def _detection_to_package(self, detection: DetectorResult) -> Package:
+        """Convert DetectorResult to Package."""
+        package = Package(
+            purl=detection.purl,
+            name=detection.name or "",
+            version=detection.version or "",
+            type=detection.package_type,
+            namespace=detection.namespace
+        )
+        
+        # Add metadata
+        if detection.metadata:
+            package.metadata = detection.metadata
+            if 'source_file' in detection.metadata:
+                package.source_path = detection.metadata['source_file']
+            elif 'source_archive' in detection.metadata:
+                package.source_path = detection.metadata['source_archive']
+        
+        return package
     
-    async def _download_package(self, url: str, parsed_purl: PackageURL) -> Optional[Path]:
-        """Download package from URL."""
-        try:
-            cache_dir = self.config.cache_dir / "downloads"
-            cache_dir.mkdir(parents=True, exist_ok=True)
+    def _extraction_to_package(self, package: Package, extraction: ExtractionResult) -> Package:
+        """Update package with extraction results."""
+        # Add licenses
+        for license_info in extraction.licenses:
+            # Try to load license text from SPDX if not provided
+            license_text = license_info.text or ""
+            if not license_text and license_info.spdx_id and license_info.spdx_id != "NOASSERTION":
+                spdx_file = Path(__file__).parent / "data" / "licenses" / f"{license_info.spdx_id}.txt"
+                if spdx_file.exists():
+                    try:
+                        license_text = spdx_file.read_text(encoding='utf-8')
+                    except Exception:
+                        pass
             
-            # Create filename from PURL
-            filename = f"{parsed_purl.type}_{parsed_purl.name}_{parsed_purl.version or 'latest'}"
-            file_path = cache_dir / filename
-            
-            # Download file
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=self.config.get("general.timeout", 30)) as response:
-                    if response.status == 200:
-                        content = await response.read()
-                        with open(file_path, 'wb') as f:
-                            f.write(content)
-                        return file_path
-            
-            return None
-        except Exception as e:
-            self.error_log.append(f"Download error for {url}: {e}")
-            return None
-    
-    async def _extract_metadata_upmex(self, package_path: Path) -> Dict[str, Any]:
-        """Extract metadata using upmex."""
-        if not upmex:
-            self.error_log.append("upmex library not available")
-            return {}
-        try:
-            return upmex.extract(str(package_path))
-        except Exception as e:
-            self.error_log.append(f"upmex error for {package_path}: {e}")
-            return {}
-    
-    async def _extract_metadata_oslili(self, package_path: Path) -> Dict[str, Any]:
-        """Extract metadata using oslili."""
-        if not oslili:
-            self.error_log.append("oslili library not available")
-            return {}
-        try:
-            return oslili.extract(str(package_path))
-        except Exception as e:
-            self.error_log.append(f"oslili error for {package_path}: {e}")
-            return {}
-    
-    def _combine_metadata(
-        self,
-        package: Package,
-        upmex_data: Dict[str, Any],
-        oslili_data: Dict[str, Any]
-    ) -> Package:
-        """Combine metadata from different sources."""
-        # Extract licenses
-        licenses_seen = set()
+            license_obj = License(
+                spdx_id=license_info.spdx_id,
+                name=license_info.name,
+                text=license_text,
+                source=str(license_info.source.value) if license_info.source else "unknown"
+            )
+            package.licenses.append(license_obj)
         
-        # From upmex
-        if "licenses" in upmex_data:
-            for lic_data in upmex_data["licenses"]:
-                spdx_id = lic_data.get("spdx_id", "NOASSERTION")
-                if spdx_id not in licenses_seen:
-                    package.licenses.append(License(
-                        spdx_id=spdx_id,
-                        name=lic_data.get("name", spdx_id),
-                        text=lic_data.get("text", ""),
-                        source="upmex"
-                    ))
-                    licenses_seen.add(spdx_id)
+        # Add copyrights
+        for copyright_info in extraction.copyrights:
+            copyright_obj = Copyright(
+                statement=copyright_info.statement,
+                year_start=copyright_info.year_start,
+                year_end=copyright_info.year_end,
+                holders=copyright_info.holders
+            )
+            package.copyrights.append(copyright_obj)
         
-        # From oslili
-        if "licenses" in oslili_data:
-            for lic_data in oslili_data["licenses"]:
-                spdx_id = lic_data.get("spdx_id", "NOASSERTION")
-                if spdx_id not in licenses_seen:
-                    package.licenses.append(License(
-                        spdx_id=spdx_id,
-                        name=lic_data.get("name", spdx_id),
-                        text=lic_data.get("text", ""),
-                        source="oslili"
-                    ))
-                    licenses_seen.add(spdx_id)
-        
-        # Extract copyrights
-        copyrights_seen = set()
-        
-        # From upmex
-        if "copyrights" in upmex_data:
-            for copyright_str in upmex_data["copyrights"]:
-                if copyright_str not in copyrights_seen:
-                    package.copyrights.append(Copyright(statement=copyright_str))
-                    copyrights_seen.add(copyright_str)
-        
-        # From oslili
-        if "copyrights" in oslili_data:
-            for copyright_str in oslili_data["copyrights"]:
-                if copyright_str not in copyrights_seen:
-                    package.copyrights.append(Copyright(statement=copyright_str))
-                    copyrights_seen.add(copyright_str)
+        # Update metadata
+        if extraction.metadata:
+            package.metadata.update(extraction.metadata)
         
         # Update status
         if not package.licenses:
@@ -312,48 +294,6 @@ class Purl2Notices:
         
         return package
     
-    def _process_with_oslili_only(self, path: Path) -> Optional[Package]:
-        """Process a path using only OSLILI (for unidentified packages)."""
-        if not oslili:
-            self.error_log.append("oslili library not available")
-            return None
-        try:
-            oslili_data = oslili.extract(str(path))
-            
-            package = Package(
-                name=path.name,
-                source_path=str(path)
-            )
-            
-            # Extract licenses
-            if "licenses" in oslili_data:
-                for lic_data in oslili_data["licenses"]:
-                    package.licenses.append(License(
-                        spdx_id=lic_data.get("spdx_id", "NOASSERTION"),
-                        name=lic_data.get("name", "Unknown"),
-                        text=lic_data.get("text", ""),
-                        source="oslili"
-                    ))
-            
-            # Extract copyrights
-            if "copyrights" in oslili_data:
-                for copyright_str in oslili_data["copyrights"]:
-                    package.copyrights.append(Copyright(statement=copyright_str))
-            
-            # Update status
-            if not package.licenses:
-                package.status = ProcessingStatus.NO_LICENSE
-            elif not package.copyrights:
-                package.status = ProcessingStatus.NO_COPYRIGHT
-            else:
-                package.status = ProcessingStatus.SUCCESS
-            
-            return package
-            
-        except Exception as e:
-            self.error_log.append(f"OSLILI processing error for {path}: {e}")
-            return None
-    
     def _load_license_texts(self, packages: List[Package]) -> Dict[str, str]:
         """Load SPDX license texts."""
         license_texts = {}
@@ -362,22 +302,40 @@ class Purl2Notices:
         # Collect needed licenses
         needed_licenses = set()
         for package in packages:
-            for license in package.licenses:
-                if license.spdx_id and license.spdx_id != "NOASSERTION":
-                    needed_licenses.add(license.spdx_id)
+            for license_obj in package.licenses:
+                if license_obj.spdx_id and license_obj.spdx_id != "NOASSERTION":
+                    needed_licenses.add(license_obj.spdx_id)
         
         # Load license texts
         for spdx_id in needed_licenses:
-            license_file = spdx_dir / f"{spdx_id}.txt"
-            if license_file.exists():
-                with open(license_file, 'r') as f:
-                    license_texts[spdx_id] = f.read()
-            else:
-                # Try to get from packages themselves
-                for package in packages:
-                    for license in package.licenses:
-                        if license.spdx_id == spdx_id and license.text:
-                            license_texts[spdx_id] = license.text
-                            break
+            # First check if any package already has the text
+            for package in packages:
+                for license_obj in package.licenses:
+                    if license_obj.spdx_id == spdx_id and license_obj.text:
+                        license_texts[spdx_id] = license_obj.text
+                        break
+                if spdx_id in license_texts:
+                    break
+            
+            # If not found, try to load from bundled licenses
+            if spdx_id not in license_texts:
+                license_file = spdx_dir / f"{spdx_id}.txt"
+                if license_file.exists():
+                    try:
+                        with open(license_file, 'r', encoding='utf-8') as f:
+                            license_texts[spdx_id] = f.read()
+                    except Exception as e:
+                        logger.error(f"Failed to load license text for {spdx_id}: {e}")
         
         return license_texts
+    
+    def save_cache(self, packages: List[Package], cache_file: Path) -> None:
+        """Save packages to cache."""
+        logger.info(f"Saving {len(packages)} packages to cache: {cache_file}")
+        cache_manager = CacheManager(cache_file)
+        cache_manager.save(packages)
+    
+    def validate_cache(self, cache_file: Path) -> bool:
+        """Validate cache file."""
+        cache_manager = CacheManager(cache_file)
+        return cache_manager.validate()

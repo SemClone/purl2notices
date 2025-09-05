@@ -26,10 +26,13 @@ Copyright Notices:
 {% endif %}
 
 {% if include_license_text %}
-License Text:
+{% set individual_licenses = license_id.split(', ') %}
+{% for individual_license in individual_licenses %}
+{{ individual_license }} License Text:
 --------------------------------------------------------------------------------
-{{ license_texts.get(license_id, 'License text not available') }}
+{{ license_texts.get(individual_license, 'License text not available') }}
 --------------------------------------------------------------------------------
+{% endfor %}
 {% endif %}
 
 {% endfor %}

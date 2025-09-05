@@ -20,38 +20,24 @@ class Purl2SrcExtractor(BaseExtractor):
         Note: purl2src only provides download URLs, not license/copyright info.
         """
         try:
-            try:
-                from semantic_copycat_purl2src import purl2src
-            except ImportError:
-                # Fallback - return a mock download URL for testing
-                logger.warning("purl2src not installed, using fallback")
-                # For npm packages, we can construct a registry URL
-                if purl.startswith("pkg:npm/"):
-                    parts = purl.replace("pkg:npm/", "").split("@")
-                    if len(parts) == 2:
-                        name, version = parts
-                        url = f"https://registry.npmjs.org/{name}/-/{name}-{version}.tgz"
-                        return ExtractionResult(
-                            success=True,
-                            metadata={'download_url': url},
-                            source=ExtractionSource.PURL2SRC
-                        )
-                return ExtractionResult(
-                    success=False,
-                    errors=["purl2src not available and no fallback for this package type"],
-                    source=ExtractionSource.PURL2SRC
-                )
-            
+            from purl2src import get_download_url
+        except ImportError:
+            logger.error("purl2src library not installed")
+            return ExtractionResult(
+                success=False,
+                errors=["purl2src library not available"],
+                source=ExtractionSource.PURL2SRC
+            )
+        
+        try:
             # Get download URL
-            result = purl2src.get_download_url(purl)
+            result = get_download_url(purl)
             
-            if result and 'url' in result:
+            if result and hasattr(result, 'download_url') and result.download_url:
                 return ExtractionResult(
                     success=True,
                     metadata={
-                        'download_url': result['url'],
-                        'repository_url': result.get('repository_url'),
-                        'homepage_url': result.get('homepage_url'),
+                        'download_url': result.download_url,
                     },
                     source=ExtractionSource.PURL2SRC
                 )

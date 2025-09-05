@@ -1,12 +1,16 @@
 """Cache management using CycloneDX format."""
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from .models import Package, License, Copyright, ProcessingStatus
+from .overrides import OverrideManager
+
+logger = logging.getLogger(__name__)
 
 
 class CacheManager:
@@ -15,10 +19,11 @@ class CacheManager:
     CYCLONEDX_VERSION = "1.6"
     SPEC_VERSION = "1.6"
     
-    def __init__(self, cache_file: Path):
+    def __init__(self, cache_file: Path, override_file: Optional[Path] = None):
         """Initialize cache manager."""
         self.cache_file = cache_file
         self.bom_ref = str(uuid.uuid4())
+        self.override_manager = OverrideManager(override_file)
     
     def load(self) -> List[Package]:
         """Load packages from cache."""
@@ -34,13 +39,17 @@ class CacheManager:
             
             return self._parse_cyclonedx(data)
         except Exception as e:
-            print(f"Warning: Failed to load cache: {e}")
+            logger.warning(f"Failed to load cache: {e}")
             return []
     
-    def save(self, packages: List[Package]) -> None:
+    def save(self, packages: List[Package], apply_overrides: bool = True) -> None:
         """Save packages to cache."""
         try:
             bom = self._create_cyclonedx(packages)
+            
+            # Apply user overrides if enabled
+            if apply_overrides:
+                bom = self.override_manager.apply_overrides_to_cache(bom)
             
             # Ensure directory exists
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -48,20 +57,77 @@ class CacheManager:
             with open(self.cache_file, 'w') as f:
                 json.dump(bom, f, indent=2)
         except Exception as e:
-            print(f"Warning: Failed to save cache: {e}")
+            logger.warning(f"Failed to save cache: {e}")
     
     def merge(self, packages: List[Package]) -> List[Package]:
-        """Merge new packages with cached ones."""
+        """Merge new packages with cached ones, preserving user overrides."""
         cached = self.load()
         
         # Create a map of cached packages by PURL/display_name
-        cache_map = {pkg.display_name: pkg for pkg in cached}
+        cache_map = {pkg.purl or pkg.display_name: pkg for pkg in cached}
         
-        # Merge with preference for new data
+        # Merge with intelligent handling of overrides
         for pkg in packages:
-            cache_map[pkg.display_name] = pkg
+            key = pkg.purl or pkg.display_name
+            
+            # If package is marked as disabled, skip it
+            if pkg.purl and self.override_manager.is_package_disabled(pkg.purl):
+                continue
+            
+            # If package exists in cache, merge intelligently
+            if key in cache_map:
+                cached_pkg = cache_map[key]
+                # Preserve user overrides from cached version
+                self._merge_package(cached_pkg, pkg)
+                cache_map[key] = cached_pkg
+            else:
+                cache_map[key] = pkg
         
         return list(cache_map.values())
+    
+    def _merge_package(self, cached: Package, new: Package) -> None:
+        """Merge new package data into cached, preserving overrides."""
+        # Update basic fields from new data
+        if new.version:
+            cached.version = new.version
+        if new.source_path:
+            cached.source_path = new.source_path
+        
+        # Merge licenses - keep disabled ones marked
+        if cached.purl:
+            disabled_licenses = self.override_manager.get_disabled_licenses(cached.purl)
+            # Filter out disabled licenses from new data
+            new_licenses = [lic for lic in new.licenses 
+                          if lic.spdx_id not in disabled_licenses]
+            # Add new licenses not in cached
+            cached_license_ids = {lic.spdx_id for lic in cached.licenses}
+            for lic in new_licenses:
+                if lic.spdx_id not in cached_license_ids:
+                    cached.licenses.append(lic)
+        else:
+            cached.licenses = new.licenses
+        
+        # Merge copyrights - keep disabled ones marked
+        if cached.purl:
+            disabled_copyrights = self.override_manager.get_disabled_copyrights(cached.purl)
+            # Filter out disabled copyrights from new data
+            new_copyrights = [cp for cp in new.copyrights 
+                            if cp.statement not in disabled_copyrights]
+            # Add new copyrights not in cached
+            cached_copyright_stmts = {cp.statement for cp in cached.copyrights}
+            for cp in new_copyrights:
+                if cp.statement not in cached_copyright_stmts:
+                    cached.copyrights.append(cp)
+        else:
+            cached.copyrights = new.copyrights
+        
+        # Update status only if new has better info
+        if new.status == ProcessingStatus.SUCCESS:
+            cached.status = new.status
+            cached.error_message = None
+        elif cached.status != ProcessingStatus.SUCCESS:
+            cached.status = new.status
+            cached.error_message = new.error_message
     
     def _create_cyclonedx(self, packages: List[Package]) -> Dict[str, Any]:
         """Create CycloneDX BOM from packages."""

@@ -28,7 +28,7 @@ class UpmexExtractor(BaseExtractor):
         """Extract metadata from a package file using upmex."""
         try:
             try:
-                from semantic_copycat_upmex import upmex
+                from upmex import PackageExtractor
             except ImportError:
                 logger.warning("upmex not installed, returning empty result")
                 return ExtractionResult(
@@ -38,7 +38,8 @@ class UpmexExtractor(BaseExtractor):
                 )
             
             # Extract metadata
-            result = upmex.extract(str(path))
+            extractor = PackageExtractor()
+            result = extractor.extract(str(path))
             
             if not result:
                 return ExtractionResult(
@@ -47,63 +48,34 @@ class UpmexExtractor(BaseExtractor):
                     source=ExtractionSource.UPMEX
                 )
             
-            # Parse licenses
+            # Parse licenses from PackageMetadata object
             licenses = []
-            if 'licenses' in result:
-                for lic_data in result['licenses']:
-                    if isinstance(lic_data, dict):
-                        license_info = LicenseInfo(
-                            spdx_id=self.normalize_license_id(
-                                lic_data.get('spdx_id', '') or 
-                                lic_data.get('id', '') or 
-                                lic_data.get('name', '')
-                            ),
-                            name=lic_data.get('name', ''),
-                            text=lic_data.get('text', ''),
-                            source=ExtractionSource.UPMEX
-                        )
-                    else:
-                        # Simple string license
-                        license_info = LicenseInfo(
-                            spdx_id=self.normalize_license_id(str(lic_data)),
-                            name=str(lic_data),
-                            source=ExtractionSource.UPMEX
-                        )
-                    licenses.append(license_info)
-            elif 'license' in result:
-                # Single license
-                license_str = result['license']
-                if license_str:
-                    licenses.append(LicenseInfo(
-                        spdx_id=self.normalize_license_id(license_str),
-                        name=license_str,
+            if hasattr(result, 'licenses') and result.licenses:
+                for lic_data in result.licenses:
+                    # lic_data is a LicenseInfo object from upmex
+                    license_info = LicenseInfo(
+                        spdx_id=self.normalize_license_id(lic_data.spdx_id or lic_data.name or ''),
+                        name=lic_data.name or lic_data.spdx_id or '',
+                        text=lic_data.text or '',
                         source=ExtractionSource.UPMEX
-                    ))
+                    )
+                    licenses.append(license_info)
             
-            # Parse copyrights
+            # Parse copyrights from PackageMetadata object
             copyrights = []
-            if 'copyrights' in result:
-                for copyright_str in result['copyrights']:
-                    if isinstance(copyright_str, str):
-                        copyright_info = self.parse_copyright_statement(copyright_str)
-                        copyright_info.source = ExtractionSource.UPMEX
-                        copyrights.append(copyright_info)
-            elif 'copyright' in result:
-                # Single copyright
-                copyright_str = result['copyright']
-                if copyright_str:
-                    copyright_info = self.parse_copyright_statement(copyright_str)
-                    copyright_info.source = ExtractionSource.UPMEX
-                    copyrights.append(copyright_info)
+            if hasattr(result, 'copyright') and result.copyright:
+                copyright_info = self.parse_copyright_statement(result.copyright)
+                copyright_info.source = ExtractionSource.UPMEX
+                copyrights.append(copyright_info)
             
-            # Additional metadata
+            # Additional metadata from PackageMetadata object
             metadata = {
-                'package_name': result.get('name', ''),
-                'package_version': result.get('version', ''),
-                'description': result.get('description', ''),
-                'homepage': result.get('homepage', ''),
-                'repository': result.get('repository', ''),
-                'authors': result.get('authors', []),
+                'package_name': getattr(result, 'name', ''),
+                'package_version': getattr(result, 'version', ''),
+                'description': getattr(result, 'description', ''),
+                'homepage': getattr(result, 'homepage', ''),
+                'repository': getattr(result, 'repository', ''),
+                'authors': getattr(result, 'authors', []),
             }
             
             return ExtractionResult(

@@ -27,7 +27,7 @@ class OsliliExtractor(BaseExtractor):
         """Extract license and copyright info using oslili."""
         try:
             try:
-                from semantic_copycat_oslili import oslili
+                from semantic_copycat_oslili import LicenseCopyrightDetector
             except ImportError:
                 logger.warning("oslili not installed, returning empty result")
                 return ExtractionResult(
@@ -37,7 +37,8 @@ class OsliliExtractor(BaseExtractor):
                 )
             
             # Extract information
-            result = oslili.extract(str(path))
+            detector = LicenseCopyrightDetector()
+            result = detector.process_local_path(str(path))
             
             if not result:
                 return ExtractionResult(
@@ -48,57 +49,39 @@ class OsliliExtractor(BaseExtractor):
             
             # Parse licenses
             licenses = []
-            if 'licenses' in result:
-                for lic_data in result['licenses']:
-                    if isinstance(lic_data, dict):
-                        license_info = LicenseInfo(
-                            spdx_id=self.normalize_license_id(
-                                lic_data.get('spdx_id', '') or
-                                lic_data.get('id', '') or
-                                lic_data.get('name', 'NOASSERTION')
-                            ),
-                            name=lic_data.get('name', ''),
-                            text=lic_data.get('text', ''),
-                            source=ExtractionSource.OSLILI,
-                            confidence=lic_data.get('confidence', 0.8)
-                        )
-                    else:
-                        license_info = LicenseInfo(
-                            spdx_id=self.normalize_license_id(str(lic_data)),
-                            name=str(lic_data),
-                            source=ExtractionSource.OSLILI,
-                            confidence=0.7
-                        )
+            if hasattr(result, 'licenses') and result.licenses:
+                for lic_data in result.licenses:
+                    license_info = LicenseInfo(
+                        spdx_id=self.normalize_license_id(
+                            getattr(lic_data, 'spdx_id', '') or
+                            getattr(lic_data, 'name', 'NOASSERTION')
+                        ),
+                        name=getattr(lic_data, 'name', '') or getattr(lic_data, 'spdx_id', ''),
+                        text=getattr(lic_data, 'text', ''),
+                        source=ExtractionSource.OSLILI,
+                        confidence=getattr(lic_data, 'confidence', 0.8)
+                    )
                     licenses.append(license_info)
             
             # Parse copyrights
             copyrights = []
-            if 'copyrights' in result:
-                for copyright_data in result['copyrights']:
-                    if isinstance(copyright_data, dict):
-                        # Structured copyright data
-                        copyright_info = CopyrightInfo(
-                            statement=copyright_data.get('statement', ''),
-                            year_start=copyright_data.get('year_start'),
-                            year_end=copyright_data.get('year_end'),
-                            holders=copyright_data.get('holders', []),
-                            source=ExtractionSource.OSLILI,
-                            confidence=copyright_data.get('confidence', 0.8)
-                        )
-                    else:
-                        # Simple string
-                        copyright_info = self.parse_copyright_statement(str(copyright_data))
-                        copyright_info.source = ExtractionSource.OSLILI
-                        copyright_info.confidence = 0.7
-                    
+            if hasattr(result, 'copyrights') and result.copyrights:
+                for copyright_data in result.copyrights:
+                    copyright_info = CopyrightInfo(
+                        statement=getattr(copyright_data, 'statement', ''),
+                        year_start=getattr(copyright_data, 'years', None),
+                        year_end=None,
+                        holders=[getattr(copyright_data, 'holder', '')] if getattr(copyright_data, 'holder', '') else [],
+                        source=ExtractionSource.OSLILI,
+                        confidence=getattr(copyright_data, 'confidence', 0.8)
+                    )
                     if copyright_info.statement:
                         copyrights.append(copyright_info)
             
             # Additional metadata
             metadata = {
-                'files_scanned': result.get('files_scanned', 0),
-                'detection_method': result.get('detection_method', ''),
-                'confidence_score': result.get('confidence_score', 0.0),
+                'package_name': getattr(result, 'package_name', ''),
+                'package_version': getattr(result, 'package_version', ''),
             }
             
             return ExtractionResult(

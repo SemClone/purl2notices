@@ -3,11 +3,11 @@
 import sys
 import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import click
-import yaml
 
 from .core import Purl2Notices
 from .config import Config
@@ -30,6 +30,11 @@ def setup_logging(verbose: int) -> None:
         level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+    
+    # Suppress verbose warnings from semantic-copycat-oslili
+    if verbose < 2:  # Unless in debug mode
+        logging.getLogger('semantic_copycat_oslili').setLevel(logging.ERROR)
+        logging.getLogger('upmex').setLevel(logging.ERROR)
 
 
 @click.command()
@@ -128,6 +133,11 @@ def setup_logging(verbose: int) -> None:
     type=click.Path(),
     help='Log file path'
 )
+@click.option(
+    '--overrides',
+    type=click.Path(path_type=Path),
+    help='User overrides configuration file'
+)
 def main(
     input: Optional[str],
     mode: str,
@@ -146,7 +156,8 @@ def main(
     no_copyright: bool,
     no_license_text: bool,
     continue_on_error: bool,
-    log_file: Optional[str]
+    log_file: Optional[str],
+    overrides: Optional[Path]
 ):
     """
     Generate legal notices (attribution to authors and copyrights) for software packages.
@@ -169,6 +180,12 @@ def main(
         purl2notices -i packages.txt --cache project.cache.json
         purl2notices --cache project.cache.json -o NOTICE.txt
     """
+    # Show help if no input provided at all
+    ctx = click.get_current_context()
+    if not input and not cache:
+        click.echo(ctx.get_help())
+        ctx.exit(0)
+    
     # Setup logging
     setup_logging(verbose)
     
@@ -206,14 +223,12 @@ def main(
         if cache:
             cache_file = Path(cache)
         else:
-            cache_file = Path(config_obj.get("cache.location", ".purl2notices.cache.json"))
+            # Use default cache location for saving, but not for loading
+            cache_file = Path(config_obj.get("cache.location", "purl2notices.cache.json"))
     
     # Auto-detect mode if needed
     if mode == 'auto':
-        if not input and cache_file and cache_file.exists():
-            mode = 'cache'
-            input = str(cache_file)
-        elif input:
+        if input:
             detected = FileValidator.detect_input_type(input)
             if detected == 'purl':
                 mode = 'single'
@@ -227,7 +242,7 @@ def main(
                 click.echo(f"Error: Could not detect input type for: {input}", err=True)
                 sys.exit(1)
         else:
-            click.echo("Error: No input provided and no cache file found", err=True)
+            click.echo("Error: No input provided", err=True)
             sys.exit(1)
     
     # Initialize processor
@@ -293,13 +308,61 @@ def main(
                 sys.exit(1)
             
             logger.info(f"Loading from cache: {input}")
-            packages = processor.process_cache(cache_path)
+            packages = processor.process_cache(cache_path, overrides)
         
         # Save to cache if enabled
         if cache_file and mode != 'cache':
             logger.info(f"Saving to cache: {cache_file}")
-            cache_manager = CacheManager(cache_file)
+            override_file = overrides or Path("purl2notices.overrides.json")
+            cache_manager = CacheManager(cache_file, override_file)
             cache_manager.save(packages)
+        
+        # Check for packages without licenses and report them
+        no_license_packages = []
+        failed_packages = []
+        for pkg in packages:
+            if pkg.status.value in ['unavailable', 'failed']:
+                failed_packages.append((pkg.display_name, pkg.error_message or 'Unknown error'))
+            elif not pkg.licenses:
+                no_license_packages.append(pkg.display_name)
+                logger.error(f"No license found for package: {pkg.display_name}")
+        
+        # Always create error.log if there are any errors
+        error_log_file = log_file or Path("error.log")
+        has_errors = no_license_packages or failed_packages
+        
+        if has_errors:
+            with open(error_log_file, 'w') as f:
+                f.write(f"=== purl2notices Error Log - {datetime.now().isoformat()} ===\n\n")
+                
+                if failed_packages:
+                    f.write(f"Failed to process {len(failed_packages)} package(s):\n")
+                    for pkg_name, error_msg in failed_packages:
+                        f.write(f"  - {pkg_name}: {error_msg}\n")
+                    f.write("\n")
+                
+                if no_license_packages:
+                    f.write(f"No licenses found for {len(no_license_packages)} package(s):\n")
+                    for pkg_name in no_license_packages:
+                        f.write(f"  - {pkg_name}\n")
+        
+        # Report to console
+        if failed_packages:
+            click.echo(f"\nWARNING: Failed to process {len(failed_packages)} package(s):", err=True)
+            for pkg_name, error_msg in failed_packages[:5]:  # Show first 5
+                click.echo(f"  - {pkg_name}: {error_msg}", err=True)
+            if len(failed_packages) > 5:
+                click.echo(f"  ... and {len(failed_packages) - 5} more", err=True)
+        
+        if no_license_packages:
+            click.echo(f"\nERROR: No licenses found for {len(no_license_packages)} package(s):", err=True)
+            for pkg_name in no_license_packages[:10]:  # Show first 10
+                click.echo(f"  - {pkg_name}", err=True)
+            if len(no_license_packages) > 10:
+                click.echo(f"  ... and {len(no_license_packages) - 10} more", err=True)
+        
+        if has_errors:
+            click.echo(f"\nErrors written to: {error_log_file}", err=True)
         
         # Generate notices
         notices = processor.generate_notices(

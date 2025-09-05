@@ -101,14 +101,13 @@ class NoticeFormatter:
         for package in packages:
             if package.licenses:
                 # For packages with multiple licenses, list under combined key
-                if len(package.licenses) > 1:
-                    license_key = ", ".join(sorted(lic.spdx_id for lic in package.licenses))
+                unique_licenses = list(dict.fromkeys(lic.spdx_id for lic in package.licenses))
+                if len(unique_licenses) > 1:
+                    license_key = ", ".join(sorted(unique_licenses))
                 else:
-                    license_key = package.licenses[0].spdx_id
-            else:
-                license_key = "NOASSERTION"
-            
-            groups[license_key].append(package)
+                    license_key = unique_licenses[0]
+                groups[license_key].append(package)
+            # Skip packages without licenses - don't add to any group
         
         # Sort groups by license ID
         return dict(sorted(groups.items()))
@@ -136,8 +135,6 @@ class NoticeFormatter:
             if include_license and package.licenses:
                 license_ids = ", ".join(lic.spdx_id for lic in package.licenses)
                 lines.append(f"License: {license_ids}")
-            elif include_license:
-                lines.append("License: NOASSERTION")
             
             if include_copyright and package.copyrights:
                 lines.append("Copyright:")

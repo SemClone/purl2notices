@@ -1,10 +1,13 @@
 """Configuration management for purl2notices."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import yaml
 from platformdirs import user_config_dir, user_cache_dir
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -68,9 +71,9 @@ class Config:
             "template": None,
         },
         "cache": {
-            "enabled": True,
-            "location": ".purl2notices.cache.json",
-            "auto_mode": True,
+            "enabled": True,  # Enabled by default to generate cache
+            "location": "purl2notices.cache.json",  # Default cache filename (not hidden)
+            "auto_mode": False,  # Don't auto-use cache unless explicitly specified
             "ttl": 86400,  # 24 hours
         },
         "network": {
@@ -96,7 +99,7 @@ class Config:
                 if user_config:
                     self._merge_config(self.config, user_config)
         except Exception as e:
-            print(f"Warning: Failed to load config from {config_file}: {e}")
+            logger.warning(f"Failed to load config from {config_file}: {e}")
     
     def _merge_config(self, base: Dict, override: Dict) -> None:
         """Recursively merge configuration dictionaries."""

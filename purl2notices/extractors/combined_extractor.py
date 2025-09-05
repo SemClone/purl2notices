@@ -1,6 +1,5 @@
 """Combined extractor that uses multiple sources."""
 
-import asyncio
 import logging
 import tempfile
 from pathlib import Path
