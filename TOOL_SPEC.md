@@ -66,12 +66,17 @@ graph TD
     L --> M[Generate Output]
     
     M --> N{Output Format}
-    N -->|Text| O[Text Template]
-    N -->|HTML| P[HTML Template]
-    N -->|JSON| Q[CycloneDX JSON]
+    N -->|Text| O[Text Legal Notice]
+    N -->|HTML| P[HTML Legal Notice]
 ```
 
 ## Operation Modes
+
+### Default Behavior
+If no input is specified but a cache file exists (either specified via `--cache` or the default `.purl2notices.cache.json`), the tool automatically runs in cache mode to regenerate notices from the cached data. This allows users to:
+1. Generate cache from any input mode
+2. Manually edit the cache file
+3. Simply run `purl2notices` to regenerate notices
 
 ### Mode A: Single Package URL
 **Use Case**: Generating notice for a single package
@@ -204,15 +209,23 @@ License Texts:
 
 ### Basic Usage
 ```bash
-purl2notices [OPTIONS] COMMAND [ARGS]
+purl2notices [OPTIONS] [COMMAND] [ARGS]
+
+# If cache file exists and no input provided, defaults to cache mode
+purl2notices --output NOTICE.txt  # Uses .purl2notices.cache.json if exists
+
+# Typical workflow
+purl2notices --input packages.txt --cache  # Generate cache
+# ... edit .purl2notices.cache.json ...
+purl2notices --output NOTICE.html          # Regenerate from cache
 ```
 
 ### Global Options
 ```
 --verbose, -v      Increase verbosity (0-3)
 --quiet, -q        Suppress non-error output
---config, -c       Config file path
---cache            Cache file location
+--config           Config file path
+--cache, -c        Cache file location (enables caching, default: .purl2notices.cache.json)
 --no-cache         Disable caching
 --parallel, -p     Number of parallel workers
 --timeout          HTTP timeout in seconds
@@ -224,15 +237,17 @@ purl2notices [OPTIONS] COMMAND [ARGS]
 ```bash
 purl2notices single PURL [OPTIONS]
   --output, -o      Output file (default: stdout)
-  --format, -f      Output format (text|html|json)
+  --format, -f      Output format (text|html) - for legal notices
   --template, -t    Custom template file
+  --cache, -c       Save intermediate data to cache file (CycloneDX JSON)
 ```
 
 #### `batch` - Process multiple PURLs
 ```bash
 purl2notices batch INPUT_FILE [OPTIONS]
-  --output, -o      Output file
-  --format, -f      Output format
+  --output, -o      Output file (legal notices)
+  --format, -f      Output format (text|html)
+  --cache, -c       Save intermediate data to cache file (CycloneDX JSON)
   --continue        Continue on errors
 ```
 
