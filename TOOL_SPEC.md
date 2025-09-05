@@ -188,6 +188,19 @@ License Texts:
   - `copyrights`: Normalized copyright statements
   - `metadata`: Additional metadata
 
+### Cache File Format (Intermediate Storage)
+The cache file uses **CycloneDX JSON SBOM format** as intermediate storage, NOT as final output.
+
+**Purpose**: Store extracted package data for manual review/editing before generating legal notices
+
+**Structure**: CycloneDX JSON with extensions for:
+- Manual copyright annotations
+- License overrides
+- Package exclusions
+- Additional attribution notes
+
+**Important**: The cache is NOT the final output. It's an editable intermediate format that stores all extracted data. The final output is always formatted legal notices (text or HTML).
+
 ## Error Handling Strategy
 
 ### Validation Errors
