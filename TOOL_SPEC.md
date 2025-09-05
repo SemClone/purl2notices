@@ -48,20 +48,23 @@ The tool addresses the need for automated generation of legal notices for softwa
 
 ```mermaid
 graph TD
-    A[Input: PURL/File/Directory] --> B{Input Type}
+    A[Input: PURL/File/Directory/Cache] --> B{Input Type}
     B -->|Single PURL| C[Validate PURL]
     B -->|KissBOM File| D[Parse PURLs]
     B -->|Directory| E[Scan for Packages]
+    B -->|Cache File| K[Load Cache]
     
     C --> F[purl2src: Get Download URL]
     D --> F
-    E --> G[Generate PURLs]
-    G --> F
+    E --> G{PURLs Generated?}
+    G -->|Yes| F
+    G -->|No| J2[oslili: Direct Extraction]
     
     F --> H[Download Package]
     H --> I[upmex: Extract Metadata]
     I --> J[oslili: Additional Extraction]
     J --> K[Check Cache]
+    J2 --> K
     K --> L[Apply Manual Annotations]
     L --> M[Generate Output]
     
@@ -122,21 +125,27 @@ purl2notices --mode scan --input ./project --recursive --max-depth 5
 
 ### Mode D: Cache-Based Annotation
 **Use Case**: Manual review and correction
-**Input**: Any mode with cache enabled
+**Input**: Cache file (CycloneDX JSON)
 **Process**:
-1. Generate initial cache (CycloneDX JSON)
+1. Generate initial cache from any other mode
 2. User manually edits cache
-3. Regenerate notices from cache
+3. Use cache as input to regenerate notices
 
 **Example**:
 ```bash
-# First pass - generate cache
+# First pass - generate cache from scan
 purl2notices --mode scan --input ./project --cache project.cdx.json
 
 # Manual edit of project.cdx.json
 
-# Second pass - use cache
-purl2notices --mode cache --cache project.cdx.json --output NOTICE.html
+# Second pass - use cache file as input
+purl2notices --input project.cdx.json --output NOTICE.html
+
+# Or use default cache implicitly
+purl2notices --output NOTICE.html  # Uses .purl2notices.cache.json if exists
+
+# Or explicitly specify cache mode
+purl2notices --mode cache --input project.cdx.json --output NOTICE.html
 ```
 
 ## Output Specifications
@@ -224,13 +233,19 @@ The cache file uses **CycloneDX JSON SBOM format** as intermediate storage, NOT 
 ```bash
 purl2notices [OPTIONS] [COMMAND] [ARGS]
 
-# If cache file exists and no input provided, defaults to cache mode
+# Input types auto-detected
+purl2notices --input pkg:npm/express@4.0.0       # Single PURL
+purl2notices --input packages.txt                # KissBOM file
+purl2notices --input ./src                       # Directory scan
+purl2notices --input project.cdx.json            # Cache file
+
+# If cache exists and no input provided, uses cache automatically
 purl2notices --output NOTICE.txt  # Uses .purl2notices.cache.json if exists
 
-# Typical workflow
-purl2notices --input packages.txt --cache  # Generate cache
-# ... edit .purl2notices.cache.json ...
-purl2notices --output NOTICE.html          # Regenerate from cache
+# Typical workflow with cache
+purl2notices --input packages.txt --cache        # Generate cache
+# ... manually edit .purl2notices.cache.json ...
+purl2notices --input .purl2notices.cache.json    # Regenerate from edited cache
 ```
 
 ### Global Options
