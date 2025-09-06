@@ -203,6 +203,10 @@ class CombinedExtractor(BaseExtractor):
                 extension = '.gem'
             elif '.zip' in url:
                 extension = '.zip'
+            elif '.nupkg' in url.lower():
+                extension = '.nupkg'
+            elif parsed.type == 'nuget':
+                extension = '.nupkg'
             
             filename = f"{parsed.type}_{parsed.name}_{parsed.version or 'latest'}{extension}"
             file_path = self.cache_dir / filename
