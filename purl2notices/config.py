@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Any
 import yaml
 from platformdirs import user_config_dir, user_cache_dir
 
+from .constants import ARCHIVE_EXTENSIONS as DEFAULT_ARCHIVE_EXTENSIONS
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,16 +30,8 @@ class Config:
         "hex": ["mix.exs", "mix.lock"],
     }
     
-    # Archive extensions for package detection
-    ARCHIVE_EXTENSIONS: List[str] = [
-        ".jar", ".war", ".ear",  # Java
-        ".whl", ".egg", ".tar.gz", ".tgz", ".zip",  # Python
-        ".gem",  # Ruby
-        ".nupkg",  # NuGet
-        ".aar",  # Android
-        ".deb", ".rpm",  # Linux packages
-        ".tgz", ".tar.bz2", ".tar.xz",  # Generic archives
-    ]
+    # Use archive extensions from constants
+    ARCHIVE_EXTENSIONS: List[str] = DEFAULT_ARCHIVE_EXTENSIONS
     
     # Default configuration
     DEFAULT_CONFIG = {

@@ -67,7 +67,7 @@ class TestCacheManager:
                 name="express",
                 version="4.18.0",
                 purl="pkg:npm/express@4.18.0",
-                licenses=[License(id="MIT")]
+                licenses=[License(spdx_id="MIT", name="", text="")]
             )
         ]
         
@@ -80,14 +80,14 @@ class TestCacheManager:
                 name="django",
                 version="4.2.0",
                 purl="pkg:pypi/django@4.2.0",
-                licenses=[License(id="BSD-3-Clause")]
+                licenses=[License(spdx_id="BSD-3-Clause", name="", text="")]
             ),
             # Duplicate that should be merged
             Package(
                 name="express",
                 version="4.18.0",
                 purl="pkg:npm/express@4.18.0",
-                licenses=[License(id="MIT")]
+                licenses=[License(spdx_id="MIT", name="", text="")]
             )
         ]
         
@@ -151,11 +151,10 @@ class TestCacheManager:
     
     def test_cache_with_overrides(self, temp_dir, overrides_file):
         """Test cache with user overrides."""
-        from purl2notices.overrides import UserOverrides
+        from purl2notices.overrides import OverrideManager
         
         cache_file = temp_dir / "test.cache.json"
-        overrides = UserOverrides(overrides_file)
-        manager = CacheManager(cache_file, overrides=overrides)
+        manager = CacheManager(cache_file, overrides_file)
         
         packages = [
             Package(

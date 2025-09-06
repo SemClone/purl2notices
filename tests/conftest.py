@@ -23,7 +23,7 @@ def sample_package() -> Package:
         name="test-package",
         version="1.0.0",
         purl="pkg:npm/test-package@1.0.0",
-        licenses=[License(id="MIT", name="MIT License", text="MIT License text...")],
+        licenses=[License(spdx_id="MIT", name="MIT License", text="MIT License text...")],
         copyrights=[Copyright(statement="Copyright (c) 2024 Test Author")],
         homepage="https://example.com",
         description="Test package description"
@@ -38,21 +38,21 @@ def sample_packages() -> list[Package]:
             name="express",
             version="4.18.0",
             purl="pkg:npm/express@4.18.0",
-            licenses=[License(id="MIT", name="MIT License")],
+            licenses=[License(spdx_id="MIT", name="MIT License", text="")],
             copyrights=[Copyright(statement="Copyright (c) 2009-2024 TJ Holowaychuk")]
         ),
         Package(
             name="django",
             version="4.2.0",
             purl="pkg:pypi/django@4.2.0",
-            licenses=[License(id="BSD-3-Clause", name="BSD 3-Clause License")],
+            licenses=[License(spdx_id="BSD-3-Clause", name="BSD 3-Clause License", text="")],
             copyrights=[Copyright(statement="Copyright (c) Django Software Foundation")]
         ),
         Package(
             name="spring-core",
             version="5.3.0",
             purl="pkg:maven/org.springframework/spring-core@5.3.0",
-            licenses=[License(id="Apache-2.0", name="Apache License 2.0")],
+            licenses=[License(spdx_id="Apache-2.0", name="Apache License 2.0", text="")],
             copyrights=[Copyright(statement="Copyright (c) VMware, Inc.")]
         )
     ]
@@ -87,7 +87,7 @@ def cache_file(temp_dir: Path, sample_packages: list[Package]) -> Path:
                 "version": pkg.version,
                 "purl": pkg.purl,
                 "licenses": [
-                    {"license": {"id": lic.id, "name": lic.name}}
+                    {"license": {"id": lic.spdx_id, "name": lic.name}}
                     for lic in pkg.licenses
                 ],
                 "copyright": " ".join(c.statement for c in pkg.copyrights)

@@ -173,10 +173,12 @@ class Purl2Notices:
         
         # Find and process archive files separately for proper attribution
         # Use the max_depth from config or a reasonable default
-        max_depth = self.config.get("scan.max_depth", 10)
+        max_depth = self.config.get("scanning.max_depth", 10)
         archive_files = self._find_archive_files(directory, max_depth=max_depth)
         if archive_files:
             logger.info(f"Processing {len(archive_files)} archive files")
+            for archive in archive_files:
+                logger.debug(f"Found archive: {archive.name} ({archive.suffix})")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
@@ -374,17 +376,24 @@ class Purl2Notices:
     
     def _find_archive_files(self, directory: Path, max_depth: int = 3) -> List[Path]:
         """Find all archive files in a directory recursively."""
-        archive_extensions = [
-            '.jar', '.war', '.ear', '.aar',  # Java
-            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.tar.xz',  # Python
-            '.gem',  # Ruby
-            '.nupkg',  # NuGet
-            '.crate',  # Rust
-            '.deb', '.rpm',  # Linux packages
-            '.zip'  # Generic archives
-        ]
+        from .constants import ARCHIVE_EXTENSIONS
+        archive_extensions = ARCHIVE_EXTENSIONS
         
         archive_files = []
+        exclude_patterns = self.config.get("scanning.exclude_patterns", [])
+        
+        def is_excluded(path: Path) -> bool:
+            """Check if path should be excluded."""
+            path_str = str(path)
+            for pattern in exclude_patterns:
+                # Check if path contains any of the exclude patterns
+                if '/test/' in path_str and 'test' in pattern:
+                    return True
+                if '/__files/' in path_str and '__files' in pattern:
+                    return True
+                if '/tests/' in path_str and 'tests' in pattern:
+                    return True
+            return False
         
         def scan_dir(path: Path, current_depth: int = 0):
             if current_depth >= max_depth:
@@ -392,13 +401,13 @@ class Purl2Notices:
             
             try:
                 for item in path.iterdir():
-                    if item.is_file():
+                    if item.is_file() and not is_excluded(item):
                         for ext in archive_extensions:
                             if item.name.endswith(ext):
                                 archive_files.append(item)
                                 break
-                    elif item.is_dir() and not item.name.startswith('.'):
-                        # Skip hidden directories
+                    elif item.is_dir() and not is_excluded(item):
+                        # Include all directories, even hidden ones
                         scan_dir(item, current_depth + 1)
             except PermissionError:
                 logger.debug(f"Permission denied accessing: {path}")
