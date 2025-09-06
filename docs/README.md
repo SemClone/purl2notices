@@ -50,9 +50,3 @@ purl2notices -i cache1.json --merge-cache cache2.json -o NOTICE.txt
 - **Input**: PURLs, KissBOM files, CycloneDX cache, archive files, directories
 - **Output**: Text, HTML, custom templates
 - **Configuration**: YAML for settings, JSON for overrides
-
-## Getting Help
-
-- **Issues**: [GitHub Issue Tracker](https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices/issues)
-- **Source**: [GitHub Repository](https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices)
-- **License**: Apache-2.0
