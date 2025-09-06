@@ -1,5 +1,6 @@
 """Output formatting for legal notices."""
 
+import json
 from pathlib import Path
 from typing import List, Dict, Optional
 from collections import defaultdict
@@ -47,7 +48,7 @@ class NoticeFormatter:
         
         Args:
             packages: List of packages to format
-            format_type: Output format (text, html)
+            format_type: Output format (text, html, json)
             group_by_license: Group packages by license
             include_copyright: Include copyright statements
             include_license_text: Include full license texts
@@ -57,6 +58,9 @@ class NoticeFormatter:
         Returns:
             Formatted legal notices
         """
+        # Handle JSON format separately
+        if format_type == "json":
+            return self._format_json(packages, group_by_license, include_copyright, include_license_text, license_texts)
         # Filter out packages with non-OSS licenses
         oss_packages = self._filter_oss_packages(packages)
         
@@ -164,6 +168,70 @@ class NoticeFormatter:
         
         # Sort groups by license ID
         return dict(sorted(groups.items()))
+    
+    def _format_json(self, packages: List[Package], group_by_license: bool = True,
+                     include_copyright: bool = True, include_license_text: bool = True,
+                     license_texts: Optional[Dict[str, str]] = None) -> str:
+        """Format packages as JSON output."""
+        # Filter out non-OSS packages
+        oss_packages = self._filter_oss_packages(packages)
+        
+        result = {
+            "metadata": {
+                "total_packages": len(oss_packages),
+                "grouped_by_license": group_by_license,
+                "includes_copyright": include_copyright,
+                "includes_license_text": include_license_text
+            }
+        }
+        
+        if group_by_license:
+            packages_by_license = self._group_by_license(oss_packages)
+            result["licenses"] = []
+            
+            for license_id, pkgs in packages_by_license.items():
+                license_data = {
+                    "id": license_id,
+                    "packages": [
+                        {
+                            "name": pkg.name,
+                            "version": pkg.version,
+                            "purl": pkg.purl,
+                            "homepage": pkg.homepage,
+                            "source_path": pkg.source_path
+                        }
+                        for pkg in pkgs
+                    ]
+                }
+                
+                if include_copyright:
+                    all_copyrights = []
+                    for pkg in pkgs:
+                        all_copyrights.extend([c.statement for c in pkg.copyrights])
+                    license_data["copyrights"] = list(set(all_copyrights))
+                
+                if include_license_text and license_texts and license_id in license_texts:
+                    license_data["text"] = license_texts[license_id]
+                
+                result["licenses"].append(license_data)
+        else:
+            result["packages"] = []
+            for pkg in oss_packages:
+                pkg_data = {
+                    "name": pkg.name,
+                    "version": pkg.version,
+                    "purl": pkg.purl,
+                    "licenses": [lic.id for lic in pkg.licenses],
+                    "homepage": pkg.homepage,
+                    "source_path": pkg.source_path
+                }
+                
+                if include_copyright:
+                    pkg_data["copyrights"] = [c.statement for c in pkg.copyrights]
+                
+                result["packages"].append(pkg_data)
+        
+        return json.dumps(result, indent=2, ensure_ascii=False)
     
     def format_simple(
         self,

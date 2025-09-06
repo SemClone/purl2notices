@@ -1,6 +1,6 @@
 """purl2notices - Generate legal notices for software packages."""
 
-__version__ = "0.1.0"
+__version__ = "1.1.0"
 __author__ = "Oscar Valenzuela B"
 __email__ = "oscar.valenzuela.b@gmail.com"
 

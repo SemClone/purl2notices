@@ -113,17 +113,20 @@ class FileValidator:
         return False
     
     @staticmethod
-    def is_archive_file(file_path: Path) -> bool:
-        """Check if a file is a supported archive file."""
-        archive_extensions = [
-            '.jar', '.war', '.ear', '.aar',  # Java
-            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.tar.xz',  # Python
-            '.gem',  # Ruby
-            '.nupkg',  # NuGet
-            '.crate',  # Rust
-            '.deb', '.rpm',  # Linux packages
-            '.zip', '.tar'  # Generic archives
-        ]
+    def is_archive_file(file_path: Path, custom_extensions: Optional[list] = None) -> bool:
+        """Check if a file is a supported archive file.
+        
+        Args:
+            file_path: Path to check
+            custom_extensions: Optional list of custom extensions to use instead of defaults
+        """
+        from .constants import ARCHIVE_EXTENSIONS
+        
+        # Use custom extensions if provided, otherwise use defaults
+        if custom_extensions:
+            archive_extensions = custom_extensions
+        else:
+            archive_extensions = ARCHIVE_EXTENSIONS
         
         for ext in archive_extensions:
             if file_path.name.endswith(ext):

@@ -9,6 +9,7 @@ from typing import Optional
 
 import click
 
+from . import __version__
 from .core import Purl2Notices
 from .config import Config
 from .cache import CacheManager
@@ -40,6 +41,9 @@ def setup_logging(verbose: int) -> None:
 
 
 @click.command()
+@click.version_option(version=__version__, prog_name='purl2notices')
+@click.option('--install-completion', is_flag=True, help='Install shell completion')
+@click.option('--show-completion', is_flag=True, help='Show shell completion script')
 @click.option(
     '--input', '-i',
     help='Input (PURL, file path, directory, or cache file)'
@@ -57,7 +61,7 @@ def setup_logging(verbose: int) -> None:
 )
 @click.option(
     '--format', '-f',
-    type=click.Choice(['text', 'html']),
+    type=click.Choice(['text', 'html', 'json']),
     default='text',
     help='Output format'
 )
@@ -147,6 +151,8 @@ def setup_logging(verbose: int) -> None:
     help='Additional cache files to merge (can be used multiple times)'
 )
 def main(
+    install_completion: bool,
+    show_completion: bool,
     input: Optional[str],
     mode: str,
     output: Optional[str],
@@ -192,6 +198,43 @@ def main(
         # Merge multiple cache files
         purl2notices -i cache1.json --merge-cache cache2.json --merge-cache cache3.json -o NOTICE.txt
     """
+    # Handle shell completion
+    if install_completion:
+        import os
+        shell = os.environ.get('SHELL', '').split('/')[-1]
+        if 'bash' in shell:
+            click.echo("# Add to ~/.bashrc:")
+            click.echo('eval "$(_PURL2NOTICES_COMPLETE=bash_source purl2notices)"')
+        elif 'zsh' in shell:
+            click.echo("# Add to ~/.zshrc:")
+            click.echo('eval "$(_PURL2NOTICES_COMPLETE=zsh_source purl2notices)"')
+        elif 'fish' in shell:
+            click.echo("# Add to ~/.config/fish/config.fish:")
+            click.echo('_PURL2NOTICES_COMPLETE=fish_source purl2notices | source')
+        else:
+            click.echo("Shell completion is available for bash, zsh, and fish")
+        return
+    
+    if show_completion:
+        import os
+        shell = os.environ.get('SHELL', '').split('/')[-1]
+        if 'bash' in shell:
+            os.environ['_PURL2NOTICES_COMPLETE'] = 'bash_source'
+        elif 'zsh' in shell:
+            os.environ['_PURL2NOTICES_COMPLETE'] = 'zsh_source'
+        elif 'fish' in shell:
+            os.environ['_PURL2NOTICES_COMPLETE'] = 'fish_source'
+        else:
+            click.echo("Shell completion is available for bash, zsh, and fish")
+            return
+        
+        # This will trigger Click's completion mechanism
+        import sys
+        sys.argv = ['purl2notices']
+        ctx = click.get_current_context()
+        ctx.complete()
+        return
+    
     # Show help if no input provided at all
     ctx = click.get_current_context()
     if not input and not cache:
