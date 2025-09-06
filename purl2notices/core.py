@@ -173,10 +173,12 @@ class Purl2Notices:
         
         # Find and process archive files separately for proper attribution
         # Use the max_depth from config or a reasonable default
-        max_depth = self.config.get("scan.max_depth", 10)
+        max_depth = self.config.get("scanning.max_depth", 10)
         archive_files = self._find_archive_files(directory, max_depth=max_depth)
         if archive_files:
             logger.info(f"Processing {len(archive_files)} archive files")
+            for archive in archive_files:
+                logger.debug(f"Found archive: {archive.name} ({archive.suffix})")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
