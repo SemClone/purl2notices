@@ -1,4 +1,4 @@
-# purl2notices
+# PURL2NOTICES - Package URL (PURL) to Legal Notices
 
 Generate legal notices (attribution to authors and copyrights) for software packages.
 
