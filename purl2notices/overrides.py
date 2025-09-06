@@ -15,6 +15,7 @@ class OverrideManager:
         """Initialize override manager."""
         self.override_file = override_file or Path("purl2notices.overrides.json")
         self.overrides = self._load_overrides()
+        self.data = self.overrides  # Alias for compatibility
     
     def _load_overrides(self) -> Dict[str, Any]:
         """Load overrides from file."""
@@ -44,8 +45,11 @@ class OverrideManager:
             logger.error(f"Failed to save overrides to {self.override_file}: {e}")
     
     def is_package_disabled(self, purl: str) -> bool:
-        """Check if a package is disabled."""
-        return purl in self.overrides.get("package_disabled", [])
+        """Check if a package is disabled or excluded."""
+        # Check both package_disabled and exclude_purls
+        return (purl in self.overrides.get("package_disabled", []) or 
+                purl in self.overrides.get("exclude_purls", []) or
+                purl in self.data.get("exclude_purls", []))
     
     def disable_package(self, purl: str) -> None:
         """Disable a package completely."""
@@ -137,6 +141,44 @@ class OverrideManager:
             "text": license_text
         }
         self.save_overrides()
+    
+    def apply_overrides(self, packages: List['Package']) -> List['Package']:
+        """Apply overrides to a list of packages."""
+        from .models import Copyright, License
+        
+        filtered_packages = []
+        
+        for pkg in packages:
+            # Skip disabled packages
+            if pkg.purl and self.is_package_disabled(pkg.purl):
+                logger.debug(f"Skipping disabled package: {pkg.purl}")
+                continue
+            
+            # Apply copyright overrides
+            if pkg.purl:
+                # Get copyright overrides from data
+                copyright_override = self.data.get("copyright_overrides", {}).get(pkg.purl)
+                if copyright_override:
+                    # Replace copyrights with override
+                    pkg.copyrights = []
+                    for cp_data in copyright_override.get("copyrights", []):
+                        pkg.copyrights.append(Copyright(statement=cp_data.get("statement", "")))
+                
+                # Get license overrides from data
+                license_override = self.data.get("license_overrides", {}).get(pkg.purl)
+                if license_override:
+                    # Replace licenses with override
+                    pkg.licenses = []
+                    for lic_data in license_override.get("licenses", []):
+                        pkg.licenses.append(License(
+                            spdx_id=lic_data.get("spdx_id", ""),
+                            name=lic_data.get("name", ""),
+                            text=""
+                        ))
+            
+            filtered_packages.append(pkg)
+        
+        return filtered_packages
     
     def apply_overrides_to_cache(self, cache_data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply overrides to cache data."""

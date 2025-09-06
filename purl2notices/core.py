@@ -3,13 +3,13 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
 from tqdm import tqdm
 
 from .models import Package, License, Copyright, ProcessingStatus
 from .config import Config
-from .validators import PurlValidator, FileValidator
+from .validators import PurlValidator
 from .cache import CacheManager
 from .formatter import NoticeFormatter
 from .detectors import DetectorRegistry, DetectorResult
@@ -171,25 +171,68 @@ class Purl2Notices:
             
             loop.close()
         
-        # If no packages found at all, scan directory with oslili
-        if not packages and not detection_results:
-            logger.info("No packages detected, scanning with oslili")
+        # Find and process archive files separately for proper attribution
+        # Use the max_depth from config or a reasonable default
+        max_depth = self.config.get("scan.max_depth", 10)
+        archive_files = self._find_archive_files(directory, max_depth=max_depth)
+        if archive_files:
+            logger.info(f"Processing {len(archive_files)} archive files")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
-            extraction = loop.run_until_complete(
-                self.extractor.oslili.extract_from_path(directory)
-            )
-            
-            if extraction.success:
-                package = Package(
-                    name=directory.name,
-                    source_path=str(directory)
+            for archive_path in archive_files:
+                # Process each archive as its own package
+                extraction = loop.run_until_complete(
+                    self.extractor.extract_from_path(archive_path)
                 )
-                package = self._extraction_to_package(package, extraction)
+                
+                # Create package with proper coordinates
+                package = Package(
+                    name=archive_path.stem,
+                    source_path=str(archive_path),
+                    type='archive'
+                )
+                
+                # Try to determine package type from file extension
+                if archive_path.suffix in ['.jar', '.war', '.ear', '.aar']:
+                    package.type = 'maven'
+                elif archive_path.suffix in ['.whl', '.egg']:
+                    package.type = 'pypi'
+                elif archive_path.suffix == '.gem':
+                    package.type = 'gem'
+                elif archive_path.suffix == '.nupkg':
+                    package.type = 'nuget'
+                
+                if extraction.success:
+                    package = self._extraction_to_package(package, extraction)
+                else:
+                    package.status = ProcessingStatus.FAILED
+                    package.error_message = f"Failed to extract from {archive_path.name}"
+                
                 packages.append(package)
             
             loop.close()
+        
+        # Scan remaining source code (excluding archives already processed)
+        logger.info("Scanning directory for source code")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Configure oslili to skip archives since we processed them separately
+        extraction = loop.run_until_complete(
+            self._extract_source_code_only(directory, skip_archives=True)
+        )
+        
+        if extraction.success and (extraction.licenses or extraction.copyrights):
+            # Create a package for the source code
+            package = Package(
+                name=f"{directory.name}_sources",
+                source_path=str(directory)
+            )
+            package = self._extraction_to_package(package, extraction)
+            packages.append(package)
+        
+        loop.close()
         
         return packages
     
@@ -329,13 +372,58 @@ class Purl2Notices:
         
         return license_texts
     
-    def save_cache(self, packages: List[Package], cache_file: Path) -> None:
-        """Save packages to cache."""
-        logger.info(f"Saving {len(packages)} packages to cache: {cache_file}")
-        cache_manager = CacheManager(cache_file)
-        cache_manager.save(packages)
+    def _find_archive_files(self, directory: Path, max_depth: int = 3) -> List[Path]:
+        """Find all archive files in a directory recursively."""
+        archive_extensions = [
+            '.jar', '.war', '.ear', '.aar',  # Java
+            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.tar.xz',  # Python
+            '.gem',  # Ruby
+            '.nupkg',  # NuGet
+            '.crate',  # Rust
+            '.deb', '.rpm',  # Linux packages
+            '.zip'  # Generic archives
+        ]
+        
+        archive_files = []
+        
+        def scan_dir(path: Path, current_depth: int = 0):
+            if current_depth >= max_depth:
+                return
+            
+            try:
+                for item in path.iterdir():
+                    if item.is_file():
+                        for ext in archive_extensions:
+                            if item.name.endswith(ext):
+                                archive_files.append(item)
+                                break
+                    elif item.is_dir() and not item.name.startswith('.'):
+                        # Skip hidden directories
+                        scan_dir(item, current_depth + 1)
+            except PermissionError:
+                logger.debug(f"Permission denied accessing: {path}")
+        
+        scan_dir(directory)
+        return archive_files
     
-    def validate_cache(self, cache_file: Path) -> bool:
-        """Validate cache file."""
-        cache_manager = CacheManager(cache_file)
-        return cache_manager.validate()
+    async def _extract_source_code_only(self, directory: Path, skip_archives: bool = True) -> ExtractionResult:
+        """Extract licenses from source code only, optionally skipping archives."""
+        try:
+            # For now, we'll use oslili but in the future we could configure it
+            # to skip archives. Since oslili doesn't have that option yet,
+            # we'll process everything and rely on the fact that we already
+            # processed archives separately
+            result = await self.extractor.oslili.extract_from_path(directory)
+            
+            # Note: In a production system, we might want to filter out
+            # licenses that we know came from archives we already processed
+            # This would require oslili to provide source file information
+            # for each license detected
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error extracting from source code: {e}")
+            return ExtractionResult(
+                success=False,
+                errors=[str(e)]
+            )

@@ -1,6 +1,5 @@
 """Validators for purl2notices."""
 
-import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 from packageurl import PackageURL
@@ -114,11 +113,29 @@ class FileValidator:
         return False
     
     @staticmethod
+    def is_archive_file(file_path: Path) -> bool:
+        """Check if a file is a supported archive file."""
+        archive_extensions = [
+            '.jar', '.war', '.ear', '.aar',  # Java
+            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.tar.xz',  # Python
+            '.gem',  # Ruby
+            '.nupkg',  # NuGet
+            '.crate',  # Rust
+            '.deb', '.rpm',  # Linux packages
+            '.zip', '.tar'  # Generic archives
+        ]
+        
+        for ext in archive_extensions:
+            if file_path.name.endswith(ext):
+                return True
+        return False
+    
+    @staticmethod
     def detect_input_type(input_path: str) -> str:
         """
         Detect the type of input.
         
-        Returns one of: 'purl', 'kissbom', 'cache', 'directory', 'unknown'
+        Returns one of: 'purl', 'kissbom', 'cache', 'archive', 'directory', 'unknown'
         """
         # Check if it's a PURL
         if input_path.startswith('pkg:'):
@@ -135,6 +152,10 @@ class FileValidator:
             # Check if it's a cache file
             if FileValidator.is_cache_file(path):
                 return 'cache'
+            
+            # Check if it's an archive file
+            if FileValidator.is_archive_file(path):
+                return 'archive'
             
             # Check if it's a KissBOM file
             is_valid, _, _ = FileValidator.validate_kissbom(path)

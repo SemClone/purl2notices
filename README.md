@@ -5,10 +5,10 @@ Generate legal notices (attribution to authors and copyrights) for software pack
 ## Features
 
 - **Multiple Input Modes**:
-  - Single Package URL (PURL)
+  - Single Package URL (PURL) or archive file (JAR, WAR, WHL, etc.)
   - Batch processing from KissBOM files
-  - Directory scanning for packages
-  - Cache-based processing
+  - Directory scanning with separate attribution for archive files
+  - Cache-based processing with merge support
 
 - **Comprehensive Package Support**:
   - 12+ package ecosystems (npm, PyPI, Maven, Cargo, Go, etc.)
@@ -23,9 +23,10 @@ Generate legal notices (attribution to authors and copyrights) for software pack
 
 - **Advanced Features**:
   - Parallel processing for batch operations
-  - CycloneDX cache format for manual review
-  - SPDX license identification
+  - CycloneDX cache format with merge capabilities
+  - SPDX license identification with dynamic pattern matching
   - Multiple extraction engines (purl2src, upmex, oslili)
+  - User override system for filtering packages and customizing metadata
 
 ## Installation
 
@@ -52,14 +53,20 @@ python scripts/download_spdx_licenses.py
 # Process a single PURL
 purl2notices -i pkg:npm/express@4.0.0
 
+# Process an archive file (JAR, WAR, WHL, etc.)
+purl2notices -i library.jar -o NOTICE.txt
+
 # Process multiple PURLs from a file
 purl2notices -i packages.txt -o NOTICE.txt
 
-# Scan a directory for packages
+# Scan a directory (processes both source code and archives separately)
 purl2notices -i ./src --recursive -o NOTICE.html -f html
 
 # Use a cache file
 purl2notices -i project.cdx.json -o NOTICE.txt
+
+# Merge multiple cache files
+purl2notices -i cache1.json --merge-cache cache2.json --merge-cache cache3.json -o NOTICE.txt
 ```
 
 ### Advanced Usage
@@ -85,8 +92,8 @@ purl2notices -i ./project \
 
 ```
 Options:
-  -i, --input TEXT              Input (PURL, file, directory, or cache)
-  -m, --mode [auto|single|kissbom|scan|cache]
+  -i, --input TEXT              Input (PURL, file, directory, archive, or cache)
+  -m, --mode [auto|single|kissbom|scan|archive|cache]
                                 Operation mode (auto-detected by default)
   -o, --output PATH             Output file (default: stdout)
   -f, --format [text|html]      Output format (default: text)
@@ -104,6 +111,8 @@ Options:
   --no-license-text             Exclude license texts
   --continue-on-error           Continue on errors
   --log-file PATH               Log file path
+  --overrides PATH              User overrides configuration file
+  --merge-cache PATH            Additional cache files to merge (multiple)
   --help                        Show this message and exit
 ```
 

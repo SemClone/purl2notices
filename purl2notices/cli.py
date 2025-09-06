@@ -13,6 +13,8 @@ from .core import Purl2Notices
 from .config import Config
 from .cache import CacheManager
 from .validators import FileValidator
+from .constants import NON_OSS_INDICATORS, COMMON_OSS_PATTERNS
+from .models import Package, ProcessingStatus
 
 
 def setup_logging(verbose: int) -> None:
@@ -44,7 +46,7 @@ def setup_logging(verbose: int) -> None:
 )
 @click.option(
     '--mode', '-m',
-    type=click.Choice(['auto', 'single', 'kissbom', 'scan', 'cache']),
+    type=click.Choice(['auto', 'single', 'kissbom', 'scan', 'archive', 'cache']),
     default='auto',
     help='Operation mode (auto-detected by default)'
 )
@@ -138,6 +140,12 @@ def setup_logging(verbose: int) -> None:
     type=click.Path(path_type=Path),
     help='User overrides configuration file'
 )
+@click.option(
+    '--merge-cache',
+    type=click.Path(path_type=Path),
+    multiple=True,
+    help='Additional cache files to merge (can be used multiple times)'
+)
 def main(
     input: Optional[str],
     mode: str,
@@ -157,7 +165,8 @@ def main(
     no_license_text: bool,
     continue_on_error: bool,
     log_file: Optional[str],
-    overrides: Optional[Path]
+    overrides: Optional[Path],
+    merge_cache: tuple
 ):
     """
     Generate legal notices (attribution to authors and copyrights) for software packages.
@@ -179,6 +188,9 @@ def main(
         # Generate and use cache
         purl2notices -i packages.txt --cache project.cache.json
         purl2notices --cache project.cache.json -o NOTICE.txt
+        
+        # Merge multiple cache files
+        purl2notices -i cache1.json --merge-cache cache2.json --merge-cache cache3.json -o NOTICE.txt
     """
     # Show help if no input provided at all
     ctx = click.get_current_context()
@@ -236,6 +248,8 @@ def main(
                 mode = 'kissbom'
             elif detected == 'cache':
                 mode = 'cache'
+            elif detected == 'archive':
+                mode = 'archive'
             elif detected == 'directory':
                 mode = 'scan'
             else:
@@ -297,6 +311,39 @@ def main(
             logger.info(f"Scanning directory: {input}")
             packages = processor.process_directory(directory)
         
+        elif mode == 'archive':
+            if not input:
+                click.echo("Error: Archive file required for archive mode", err=True)
+                sys.exit(1)
+            
+            archive_path = Path(input)
+            if not archive_path.exists():
+                click.echo(f"Error: Archive file not found: {input}", err=True)
+                sys.exit(1)
+            
+            logger.info(f"Processing archive: {input}")
+            # Process archive file through extractor
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            extraction = loop.run_until_complete(
+                processor.extractor.extract_from_path(archive_path)
+            )
+            loop.close()
+            
+            # Create package from extraction
+            package = Package(
+                name=archive_path.stem,
+                source_path=str(archive_path)
+            )
+            
+            if extraction.success:
+                package = processor._extraction_to_package(package, extraction)
+            else:
+                package.status = ProcessingStatus.FAILED
+                package.error_message = "; ".join(extraction.errors) if extraction.errors else "Failed to extract from archive"
+            
+            packages = [package]
+        
         elif mode == 'cache':
             if not input:
                 click.echo("Error: Cache file required for cache mode", err=True)
@@ -310,6 +357,25 @@ def main(
             logger.info(f"Loading from cache: {input}")
             packages = processor.process_cache(cache_path, overrides)
         
+        # Merge additional cache files if provided
+        if merge_cache:
+            logger.info(f"Merging {len(merge_cache)} additional cache files")
+            for merge_file in merge_cache:
+                merge_path = Path(merge_file)
+                if merge_path.exists():
+                    logger.info(f"Merging cache from: {merge_path}")
+                    merge_manager = CacheManager(merge_path, Path("purl2notices.overrides.json"))
+                    merge_packages = merge_manager.load(apply_overrides=False)
+                    
+                    # Add to packages list
+                    existing_purls = {pkg.purl for pkg in packages if pkg.purl}
+                    for pkg in merge_packages:
+                        if pkg.purl not in existing_purls:
+                            packages.append(pkg)
+                            existing_purls.add(pkg.purl)
+                else:
+                    logger.warning(f"Cache file not found: {merge_path}")
+        
         # Save to cache if enabled
         if cache_file and mode != 'cache':
             logger.info(f"Saving to cache: {cache_file}")
@@ -317,19 +383,57 @@ def main(
             cache_manager = CacheManager(cache_file, override_file)
             cache_manager.save(packages)
         
-        # Check for packages without licenses and report them
+        # Check for packages without licenses and non-SPDX/commercial licenses
         no_license_packages = []
         failed_packages = []
+        non_oss_packages = []  # Packages with commercial/proprietary/non-SPDX licenses
+        
+        # Build set of valid SPDX license IDs from files
+        licenses_dir = Path(__file__).parent / "data" / "licenses"
+        valid_spdx_ids = set()
+        if licenses_dir.exists():
+            for license_file in licenses_dir.glob("*.txt"):
+                # Remove .txt extension to get license ID
+                valid_spdx_ids.add(license_file.stem)
+        
+        # Also build lowercase mapping for case-insensitive matching
+        valid_spdx_lower = {lid.lower(): lid for lid in valid_spdx_ids}
+        
         for pkg in packages:
             if pkg.status.value in ['unavailable', 'failed']:
                 failed_packages.append((pkg.display_name, pkg.error_message or 'Unknown error'))
             elif not pkg.licenses:
                 no_license_packages.append(pkg.display_name)
                 logger.error(f"No license found for package: {pkg.display_name}")
+            else:
+                # Check for non-SPDX or commercial licenses
+                for license_info in pkg.licenses:
+                    license_id = (license_info.spdx_id or license_info.name or '').lower()
+                    
+                    # Check if it's a known non-OSS license
+                    is_non_oss = any(indicator in license_id for indicator in NON_OSS_INDICATORS)
+                    
+                    # Also check if it's not a recognized SPDX license
+                    is_unrecognized_spdx = False
+                    if license_info.spdx_id:
+                        # Check exact match or case-insensitive match
+                        if license_info.spdx_id not in valid_spdx_ids:
+                            # Try case-insensitive match
+                            spdx_lower = license_info.spdx_id.lower()
+                            if spdx_lower not in valid_spdx_lower:
+                                # Check for common OSS license patterns without version
+                                if not any(oss in spdx_lower for oss in COMMON_OSS_PATTERNS):
+                                    is_unrecognized_spdx = True
+                    
+                    if license_id and (is_non_oss or is_unrecognized_spdx):
+                        license_display = license_info.spdx_id or license_info.name or 'Unknown'
+                        non_oss_packages.append((pkg.display_name, license_display))
+                        logger.warning(f"Non-OSS or unrecognized license found for {pkg.display_name}: {license_display}")
+                        break  # Only report once per package
         
         # Always create error.log if there are any errors
         error_log_file = log_file or Path("error.log")
-        has_errors = no_license_packages or failed_packages
+        has_errors = no_license_packages or failed_packages or non_oss_packages
         
         if has_errors:
             with open(error_log_file, 'w') as f:
@@ -345,6 +449,12 @@ def main(
                     f.write(f"No licenses found for {len(no_license_packages)} package(s):\n")
                     for pkg_name in no_license_packages:
                         f.write(f"  - {pkg_name}\n")
+                    f.write("\n")
+                
+                if non_oss_packages:
+                    f.write(f"Non-OSS or unrecognized licenses found in {len(non_oss_packages)} package(s):\n")
+                    for pkg_name, license_name in non_oss_packages:
+                        f.write(f"  - {pkg_name}: {license_name}\n")
         
         # Report to console
         if failed_packages:
@@ -360,6 +470,13 @@ def main(
                 click.echo(f"  - {pkg_name}", err=True)
             if len(no_license_packages) > 10:
                 click.echo(f"  ... and {len(no_license_packages) - 10} more", err=True)
+        
+        if non_oss_packages:
+            click.echo(f"\nWARNING: Non-OSS or unrecognized licenses in {len(non_oss_packages)} package(s):", err=True)
+            for pkg_name, license_name in non_oss_packages[:5]:  # Show first 5
+                click.echo(f"  - {pkg_name}: {license_name}", err=True)
+            if len(non_oss_packages) > 5:
+                click.echo(f"  ... and {len(non_oss_packages) - 5} more", err=True)
         
         if has_errors:
             click.echo(f"\nErrors written to: {error_log_file}", err=True)

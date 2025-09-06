@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 
 from .models import Package, License, Copyright, ProcessingStatus
 from .overrides import OverrideManager
+from .constants import CACHE_FORMAT, CACHE_SPEC_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +17,14 @@ logger = logging.getLogger(__name__)
 class CacheManager:
     """Manage cache in CycloneDX format."""
     
-    CYCLONEDX_VERSION = "1.6"
-    SPEC_VERSION = "1.6"
-    
     def __init__(self, cache_file: Path, override_file: Optional[Path] = None):
         """Initialize cache manager."""
         self.cache_file = cache_file
         self.bom_ref = str(uuid.uuid4())
         self.override_manager = OverrideManager(override_file)
     
-    def load(self) -> List[Package]:
-        """Load packages from cache."""
+    def load(self, apply_overrides: bool = True) -> List[Package]:
+        """Load packages from cache and apply overrides."""
         if not self.cache_file.exists():
             return []
         
@@ -34,17 +32,27 @@ class CacheManager:
             with open(self.cache_file, 'r') as f:
                 data = json.load(f)
             
-            if data.get('bomFormat') != 'CycloneDX':
+            if data.get('bomFormat') != CACHE_FORMAT:
                 raise ValueError("Invalid cache format: not a CycloneDX BOM")
             
-            return self._parse_cyclonedx(data)
+            packages = self._parse_cyclonedx(data)
+            
+            # Apply overrides if enabled
+            if apply_overrides and self.override_manager.override_file.exists():
+                packages = self.override_manager.apply_overrides(packages)
+            
+            return packages
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}")
             return []
     
     def save(self, packages: List[Package], apply_overrides: bool = True) -> None:
-        """Save packages to cache."""
+        """Save packages to cache, merging with existing cache if present."""
         try:
+            # If cache file exists, merge with existing packages
+            if self.cache_file.exists():
+                packages = self.merge(packages)
+            
             bom = self._create_cyclonedx(packages)
             
             # Apply user overrides if enabled
@@ -204,8 +212,8 @@ class CacheManager:
         
         # Create the BOM
         bom = {
-            "bomFormat": "CycloneDX",
-            "specVersion": self.SPEC_VERSION,
+            "bomFormat": CACHE_FORMAT,
+            "specVersion": CACHE_SPEC_VERSION,
             "serialNumber": f"urn:uuid:{self.bom_ref}",
             "version": 1,
             "metadata": {
@@ -287,26 +295,3 @@ class CacheManager:
             packages.append(pkg)
         
         return packages
-    
-    def validate(self) -> bool:
-        """Validate cache file structure."""
-        if not self.cache_file.exists():
-            return False
-        
-        try:
-            with open(self.cache_file, 'r') as f:
-                data = json.load(f)
-            
-            # Check required fields
-            if data.get('bomFormat') != 'CycloneDX':
-                return False
-            
-            if 'specVersion' not in data:
-                return False
-            
-            if 'components' not in data:
-                return False
-            
-            return True
-        except Exception:
-            return False

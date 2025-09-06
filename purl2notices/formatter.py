@@ -1,11 +1,12 @@
 """Output formatting for legal notices."""
 
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 from collections import defaultdict
 from jinja2 import Environment, FileSystemLoader, Template
 
-from .models import Package, License
+from .models import Package
+from .constants import NON_OSS_INDICATORS, COMMON_OSS_PATTERNS
 
 
 class NoticeFormatter:
@@ -56,9 +57,12 @@ class NoticeFormatter:
         Returns:
             Formatted legal notices
         """
+        # Filter out packages with non-OSS licenses
+        oss_packages = self._filter_oss_packages(packages)
+        
         # Prepare template context
         context = {
-            "packages": packages,
+            "packages": oss_packages,
             "group_by_license": group_by_license,
             "include_copyright": include_copyright,
             "include_license_text": include_license_text,
@@ -67,7 +71,7 @@ class NoticeFormatter:
         
         # Group packages by license if requested
         if group_by_license:
-            packages_by_license = self._group_by_license(packages)
+            packages_by_license = self._group_by_license(oss_packages)
             context["packages_by_license"] = packages_by_license
             
             # Collect all license texts needed
@@ -93,6 +97,55 @@ class NoticeFormatter:
         
         # Render template
         return template.render(**context)
+    
+    def _filter_oss_packages(self, packages: List[Package]) -> List[Package]:
+        """Filter out packages with non-OSS licenses."""
+        oss_packages = []
+        
+        licenses_dir = Path(__file__).parent / "data" / "licenses"
+        
+        # Build set of valid SPDX license IDs from files
+        valid_spdx_ids = set()
+        if licenses_dir.exists():
+            for license_file in licenses_dir.glob("*.txt"):
+                # Remove .txt extension to get license ID
+                valid_spdx_ids.add(license_file.stem)
+        
+        # Also build lowercase mapping for case-insensitive matching
+        valid_spdx_lower = {lid.lower(): lid for lid in valid_spdx_ids}
+        
+        for package in packages:
+            # Skip packages without licenses
+            if not package.licenses:
+                continue
+            
+            # Check if any license is non-OSS
+            is_non_oss = False
+            for license_info in package.licenses:
+                license_id = (license_info.spdx_id or license_info.name or '').lower()
+                
+                # Check if it's a known non-OSS license
+                if license_id and any(indicator in license_id for indicator in NON_OSS_INDICATORS):
+                    is_non_oss = True
+                    break
+                
+                # Check if it's an unrecognized SPDX license
+                if license_info.spdx_id:
+                    # Check exact match or case-insensitive match
+                    if license_info.spdx_id not in valid_spdx_ids:
+                        # Try case-insensitive match
+                        spdx_lower = license_info.spdx_id.lower()
+                        if spdx_lower not in valid_spdx_lower:
+                            # Check for common OSS license patterns without version
+                            if not any(oss in spdx_lower for oss in COMMON_OSS_PATTERNS):
+                                is_non_oss = True
+                                break
+            
+            # Only include OSS packages
+            if not is_non_oss:
+                oss_packages.append(package)
+        
+        return oss_packages
     
     def _group_by_license(self, packages: List[Package]) -> Dict[str, List[Package]]:
         """Group packages by their licenses."""
@@ -123,13 +176,16 @@ class NoticeFormatter:
         
         Useful for quick output or debugging.
         """
+        # Filter out non-OSS packages
+        oss_packages = self._filter_oss_packages(packages)
+        
         lines = []
         lines.append("=" * 80)
         lines.append("LEGAL NOTICES")
         lines.append("=" * 80)
         lines.append("")
         
-        for package in packages:
+        for package in oss_packages:
             lines.append(f"Package: {package.display_name}")
             
             if include_license and package.licenses:
