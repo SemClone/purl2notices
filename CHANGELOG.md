@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2025-09-06
+
+### Added
+- Shell completion support for bash, zsh, and fish
+- JSON output format (`--format json`) for programmatic processing
+- Test suite with unit and integration tests
+- Utility functions module to reduce code duplication
+- Exclusion pattern support for archive file scanning
+
+### Changed
+- Archive scanner now includes hidden directories (e.g., `.mvn/`)
+- CLI always sets recursive and max_depth configuration values
+- Refactored to eliminate code duplication across modules
+
+### Fixed
+- CLI depth parameter (`-d`) now correctly passes to directory scanner
+- Hidden directories are no longer skipped during archive scanning
+- Config key mismatch for max_depth (was `scan.max_depth`, now `scanning.max_depth`)
+- License model missing @dataclass decorator
+- Test data files in test directories can now be excluded with `-e test`
+
 ## [1.1.0] - 2024-01-06
 
 ### Added
