@@ -380,6 +380,20 @@ class Purl2Notices:
         archive_extensions = ARCHIVE_EXTENSIONS
         
         archive_files = []
+        exclude_patterns = self.config.get("scanning.exclude_patterns", [])
+        
+        def is_excluded(path: Path) -> bool:
+            """Check if path should be excluded."""
+            path_str = str(path)
+            for pattern in exclude_patterns:
+                # Check if path contains any of the exclude patterns
+                if '/test/' in path_str and 'test' in pattern:
+                    return True
+                if '/__files/' in path_str and '__files' in pattern:
+                    return True
+                if '/tests/' in path_str and 'tests' in pattern:
+                    return True
+            return False
         
         def scan_dir(path: Path, current_depth: int = 0):
             if current_depth >= max_depth:
@@ -387,12 +401,12 @@ class Purl2Notices:
             
             try:
                 for item in path.iterdir():
-                    if item.is_file():
+                    if item.is_file() and not is_excluded(item):
                         for ext in archive_extensions:
                             if item.name.endswith(ext):
                                 archive_files.append(item)
                                 break
-                    elif item.is_dir():
+                    elif item.is_dir() and not is_excluded(item):
                         # Include all directories, even hidden ones
                         scan_dir(item, current_depth + 1)
             except PermissionError:
