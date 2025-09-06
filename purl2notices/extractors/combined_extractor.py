@@ -56,27 +56,69 @@ class CombinedExtractor(BaseExtractor):
         metadata = {}
         
         try:
-            # Step 1: Get download URL using purl2src
-            logger.debug(f"Getting download URL for {purl}")
-            purl2src_result = await self.purl2src.extract_from_purl(purl)
+            from packageurl import PackageURL
+            parsed_purl = PackageURL.from_string(purl)
             
-            if not purl2src_result.success:
-                errors.extend(purl2src_result.errors)
-                return ExtractionResult(
-                    success=False,
-                    errors=errors,
-                    source=ExtractionSource.PURL2SRC
-                )
+            # Special handling for generic packages with vcs_url - bypass purl2src
+            download_url = None
+            if parsed_purl.type == 'generic' and 'vcs_url' in parsed_purl.qualifiers:
+                vcs_url = parsed_purl.qualifiers['vcs_url']
+                # Parse git+https://... format
+                if vcs_url.startswith('git+'):
+                    vcs_url = vcs_url[4:]  # Remove 'git+' prefix
+                
+                # Extract commit/tag from URL if present
+                if '@' in vcs_url:
+                    base_url, ref = vcs_url.rsplit('@', 1)
+                    # Try to convert to archive URL if it's a GitHub/GitLab URL
+                    if 'github.com' in base_url:
+                        # Extract owner/repo from URL
+                        parts = base_url.replace('https://github.com/', '').replace('.git', '').split('/')
+                        if len(parts) >= 2:
+                            download_url = f"https://github.com/{parts[0]}/{parts[1]}/archive/{ref}.tar.gz"
+                            logger.debug(f"Converted generic GitHub VCS URL to archive: {download_url}")
+                    elif 'gitlab' in base_url or 'git.fsfe.org' in base_url:
+                        # For GitLab-style repos, construct archive URL
+                        base_url = base_url.replace('.git', '')
+                        download_url = f"{base_url}/-/archive/{ref}/archive.tar.gz"
+                        logger.debug(f"Converted generic GitLab VCS URL to archive: {download_url}")
+                else:
+                    # No ref specified, just use the URL as-is
+                    download_url = vcs_url
             
-            download_url = purl2src_result.metadata.get('download_url')
+            # If we didn't handle it specially, use purl2src
             if not download_url:
-                return ExtractionResult(
-                    success=False,
-                    errors=["No download URL found"],
-                    source=ExtractionSource.PURL2SRC
-                )
+                # Step 1: Get download URL using purl2src
+                logger.debug(f"Getting download URL for {purl}")
+                purl2src_result = await self.purl2src.extract_from_purl(purl)
+                
+                if not purl2src_result.success:
+                    errors.extend(purl2src_result.errors)
+                    return ExtractionResult(
+                        success=False,
+                        errors=errors,
+                        source=ExtractionSource.PURL2SRC
+                    )
+                
+                download_url = purl2src_result.metadata.get('download_url')
+                if not download_url:
+                    return ExtractionResult(
+                        success=False,
+                        errors=["No download URL found"],
+                        source=ExtractionSource.PURL2SRC
+                    )
+                
+                metadata.update(purl2src_result.metadata)
             
-            metadata.update(purl2src_result.metadata)
+            # Additional handling for GitHub packages that returned git URLs
+            if parsed_purl.type == 'github' and download_url.endswith('.git'):
+                # Convert to tarball URL: https://github.com/{namespace}/{name}/archive/{version}.tar.gz
+                if parsed_purl.version:
+                    download_url = f"https://github.com/{parsed_purl.namespace}/{parsed_purl.name}/archive/{parsed_purl.version}.tar.gz"
+                    logger.debug(f"Converted GitHub URL to archive: {download_url}")
+                else:
+                    # Default to main branch if no version
+                    download_url = f"https://github.com/{parsed_purl.namespace}/{parsed_purl.name}/archive/main.tar.gz"
             
             # Step 2: Download the package
             logger.debug(f"Downloading package from {download_url}")
