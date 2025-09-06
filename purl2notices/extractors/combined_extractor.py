@@ -208,8 +208,12 @@ class CombinedExtractor(BaseExtractor):
                 extension = '.zip'
             elif '.nupkg' in url.lower():
                 extension = '.nupkg'
+            elif '.tar.bz2' in url:
+                extension = '.tar.bz2'
             elif parsed.type == 'nuget':
                 extension = '.nupkg'
+            elif parsed.type == 'conda':
+                extension = '.tar.bz2'
             
             filename = f"{parsed.type}_{parsed.name}_{parsed.version or 'latest'}{extension}"
             file_path = self.cache_dir / filename
@@ -239,7 +243,7 @@ class CombinedExtractor(BaseExtractor):
     def _is_package_file(self, path: Path) -> bool:
         """Check if file is a package archive."""
         package_extensions = [
-            '.whl', '.egg', '.tar.gz', '.tgz', '.zip',
+            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.zip',
             '.jar', '.war', '.ear', '.gem', '.nupkg',
             '.deb', '.rpm', '.crate'
         ]
