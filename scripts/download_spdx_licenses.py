@@ -1,100 +1,126 @@
 #!/usr/bin/env python3
-"""Download SPDX license texts for bundling with the package."""
+"""Download all SPDX license texts."""
 
 import json
-import requests
+import os
+import sys
 from pathlib import Path
-from typing import Dict, List
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
+def download_license(license_id: str, details_url: str, output_dir: Path) -> tuple:
+    """Download a single license text."""
+    try:
+        # Get license details
+        response = requests.get(details_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Get the license text
+        license_text = data.get('licenseText', '')
+        if not license_text:
+            # Try standardLicenseTemplate as fallback
+            license_text = data.get('standardLicenseTemplate', '')
+        
+        if license_text:
+            # Save to file
+            output_file = output_dir / f"{license_id}.txt"
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(license_text)
+            return (license_id, 'success', len(license_text))
+        else:
+            return (license_id, 'no_text', 0)
+    except Exception as e:
+        return (license_id, f'error: {e}', 0)
 
-def download_spdx_licenses() -> None:
-    """Download SPDX license list and texts."""
-    print("Downloading SPDX license data...")
+def main():
+    # Setup paths
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    licenses_dir = project_root / 'purl2notices' / 'data' / 'licenses'
+    licenses_dir.mkdir(parents=True, exist_ok=True)
     
-    # URLs for SPDX data
-    LICENSE_LIST_URL = "https://raw.githubusercontent.com/spdx/license-list-data/main/json/licenses.json"
-    LICENSE_TEXT_BASE = "https://raw.githubusercontent.com/spdx/license-list-data/main/text/"
+    print(f"Downloading SPDX licenses to: {licenses_dir}")
     
-    # Create output directory
-    output_dir = Path(__file__).parent.parent / "purl2notices" / "data" / "licenses"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Download license list
-    print("Fetching license list...")
-    response = requests.get(LICENSE_LIST_URL)
+    # Get the SPDX license list
+    print("Fetching SPDX license list...")
+    response = requests.get('https://spdx.org/licenses/licenses.json')
     response.raise_for_status()
-    license_data = response.json()
+    spdx_data = response.json()
     
-    # Save license metadata
-    metadata_file = output_dir / "spdx_licenses.json"
-    with open(metadata_file, 'w') as f:
-        json.dump(license_data, f, indent=2)
+    licenses = spdx_data.get('licenses', [])
+    print(f"Found {len(licenses)} SPDX licenses")
     
-    print(f"Found {len(license_data['licenses'])} licenses")
-    
-    # Download common license texts
-    common_licenses = [
-        "MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "GPL-2.0-only",
-        "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later", "LGPL-2.1-only",
-        "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "ISC",
-        "MPL-2.0", "CC0-1.0", "Unlicense", "AGPL-3.0-only", "AGPL-3.0-or-later",
-        "EPL-1.0", "EPL-2.0", "CC-BY-4.0", "CC-BY-SA-4.0", "BSD-4-Clause",
-        "0BSD", "Zlib", "WTFPL", "PostgreSQL", "Python-2.0", "PHP-3.0",
-        "Ruby", "Artistic-2.0", "BSL-1.0", "AFL-3.0", "MS-PL", "MS-RL"
-    ]
-    
-    print(f"Downloading texts for {len(common_licenses)} common licenses...")
-    
-    downloaded = 0
-    failed = []
-    
-    for license_id in common_licenses:
-        try:
-            # Find license in metadata
-            license_info = next(
-                (lic for lic in license_data['licenses'] if lic['licenseId'] == license_id),
-                None
-            )
-            
-            if not license_info:
-                print(f"  Warning: {license_id} not found in SPDX list")
+    # Prepare download tasks
+    download_tasks = []
+    for license_info in licenses:
+        license_id = license_info.get('licenseId')
+        details_url = license_info.get('detailsUrl')
+        
+        if license_id and details_url:
+            # Skip if already downloaded
+            if (licenses_dir / f"{license_id}.txt").exists():
                 continue
-            
-            # Download license text
-            text_url = f"{LICENSE_TEXT_BASE}{license_id}.txt"
-            response = requests.get(text_url)
-            response.raise_for_status()
-            
-            # Save license text
-            text_file = output_dir / f"{license_id}.txt"
-            with open(text_file, 'w', encoding='utf-8') as f:
-                f.write(response.text)
-            
-            downloaded += 1
-            print(f"  Downloaded: {license_id}")
-            
-        except Exception as e:
-            print(f"  Failed to download {license_id}: {e}")
-            failed.append(license_id)
+            download_tasks.append((license_id, details_url))
     
-    print(f"\nDownloaded {downloaded} license texts")
-    if failed:
-        print(f"Failed to download: {', '.join(failed)}")
+    print(f"Need to download {len(download_tasks)} licenses")
     
-    # Create a summary file
+    if not download_tasks:
+        print("All licenses already downloaded!")
+        return
+    
+    # Download licenses in parallel
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(download_license, lid, url, licenses_dir): lid 
+            for lid, url in download_tasks
+        }
+        
+        for future in as_completed(futures):
+            result = future.result()
+            results.append(result)
+            
+            # Print progress
+            if len(results) % 10 == 0:
+                print(f"Downloaded {len(results)}/{len(download_tasks)} licenses...")
+    
+    # Summary
+    print("\n=== Download Summary ===")
+    success_count = sum(1 for _, status, _ in results if status == 'success')
+    no_text_count = sum(1 for _, status, _ in results if status == 'no_text')
+    error_count = sum(1 for _, status, _ in results if status.startswith('error'))
+    
+    print(f"Successfully downloaded: {success_count}")
+    print(f"No text available: {no_text_count}")
+    print(f"Errors: {error_count}")
+    
+    # Save summary
     summary = {
-        "total_licenses": len(license_data['licenses']),
-        "downloaded": downloaded,
-        "common_licenses": common_licenses,
-        "failed": failed
+        'total_licenses': len(licenses),
+        'downloaded': success_count,
+        'no_text': no_text_count,
+        'errors': error_count,
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
     }
     
-    summary_file = output_dir / "download_summary.json"
-    with open(summary_file, 'w') as f:
+    with open(licenses_dir / 'download_summary.json', 'w') as f:
         json.dump(summary, f, indent=2)
     
-    print(f"\nLicense data saved to: {output_dir}")
+    # List errors if any
+    if error_count > 0:
+        print("\nErrors:")
+        for lid, status, _ in results:
+            if status.startswith('error'):
+                print(f"  - {lid}: {status}")
+    
+    # List licenses with no text
+    if no_text_count > 0:
+        print("\nLicenses with no text available:")
+        for lid, status, _ in results:
+            if status == 'no_text':
+                print(f"  - {lid}")
 
-
-if __name__ == "__main__":
-    download_spdx_licenses()
+if __name__ == '__main__':
+    main()
