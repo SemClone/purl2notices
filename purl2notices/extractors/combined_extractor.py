@@ -284,13 +284,9 @@ class CombinedExtractor(BaseExtractor):
     
     def _is_package_file(self, path: Path) -> bool:
         """Check if file is a package archive."""
-        package_extensions = [
-            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.zip',
-            '.jar', '.war', '.ear', '.gem', '.nupkg',
-            '.deb', '.rpm', '.crate'
-        ]
+        from ..constants import ARCHIVE_EXTENSIONS
         
-        for ext in package_extensions:
+        for ext in ARCHIVE_EXTENSIONS:
             if path.name.endswith(ext):
                 return True
         return False

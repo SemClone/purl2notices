@@ -374,15 +374,8 @@ class Purl2Notices:
     
     def _find_archive_files(self, directory: Path, max_depth: int = 3) -> List[Path]:
         """Find all archive files in a directory recursively."""
-        archive_extensions = [
-            '.jar', '.war', '.ear', '.aar',  # Java
-            '.whl', '.egg', '.tar.gz', '.tgz', '.tar.bz2', '.tar.xz',  # Python
-            '.gem',  # Ruby
-            '.nupkg',  # NuGet
-            '.crate',  # Rust
-            '.deb', '.rpm',  # Linux packages
-            '.zip'  # Generic archives
-        ]
+        from .constants import ARCHIVE_EXTENSIONS
+        archive_extensions = ARCHIVE_EXTENSIONS
         
         archive_files = []
         

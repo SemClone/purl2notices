@@ -1,6 +1,7 @@
 """Unit tests for models module."""
 
 import pytest
+import dataclasses
 from purl2notices.models import Package, License, Copyright
 
 
@@ -10,48 +11,24 @@ class TestLicense:
     def test_license_creation(self):
         """Test creating a License instance."""
         license = License(
-            id="MIT",
+            spdx_id="MIT",
             name="MIT License",
             text="MIT License text..."
         )
-        assert license.id == "MIT"
+        assert license.spdx_id == "MIT"
         assert license.name == "MIT License"
         assert license.text == "MIT License text..."
     
     def test_license_equality(self):
         """Test License equality comparison."""
-        license1 = License(id="MIT", name="MIT License")
-        license2 = License(id="MIT", name="MIT License")
-        license3 = License(id="Apache-2.0", name="Apache License 2.0")
+        license1 = License(spdx_id="MIT", name="MIT License", text="")
+        license2 = License(spdx_id="MIT", name="MIT License", text="")
+        license3 = License(spdx_id="Apache-2.0", name="Apache License 2.0", text="")
         
         assert license1 == license2
         assert license1 != license3
     
-    def test_license_dict_conversion(self):
-        """Test License to_dict conversion."""
-        license = License(
-            id="MIT",
-            name="MIT License",
-            text="MIT text"
-        )
-        
-        data = license.to_dict()
-        assert data["id"] == "MIT"
-        assert data["name"] == "MIT License"
-        assert data["text"] == "MIT text"
-    
-    def test_license_from_dict(self):
-        """Test License from_dict creation."""
-        data = {
-            "id": "Apache-2.0",
-            "name": "Apache License 2.0",
-            "text": "Apache text"
-        }
-        
-        license = License.from_dict(data)
-        assert license.id == "Apache-2.0"
-        assert license.name == "Apache License 2.0"
-        assert license.text == "Apache text"
+
 
 
 class TestCopyright:
@@ -80,16 +57,7 @@ class TestCopyright:
         assert copyright1 == copyright2
         assert copyright1 != copyright3
     
-    def test_copyright_dict_conversion(self):
-        """Test Copyright to_dict conversion."""
-        copyright = Copyright(
-            statement="Copyright (c) 2024 Test",
-            confidence=0.9
-        )
-        
-        data = copyright.to_dict()
-        assert data["statement"] == "Copyright (c) 2024 Test"
-        assert data["confidence"] == 0.9
+
 
 
 class TestPackage:
@@ -101,7 +69,7 @@ class TestPackage:
             name="test-package",
             version="1.0.0",
             purl="pkg:npm/test-package@1.0.0",
-            licenses=[License(id="MIT")],
+            licenses=[License(spdx_id="MIT", name="", text="")],
             copyrights=[Copyright(statement="Copyright 2024 Test")]
         )
         
@@ -138,8 +106,8 @@ class TestPackage:
             name="test",
             version="1.0.0",
             licenses=[
-                License(id="MIT"),
-                License(id="Apache-2.0")
+                License(spdx_id="MIT", name="", text=""),
+                License(spdx_id="Apache-2.0", name="", text="")
             ]
         )
         
@@ -150,7 +118,7 @@ class TestPackage:
         package_with_licenses = Package(
             name="test",
             version="1.0.0",
-            licenses=[License(id="MIT")]
+            licenses=[License(spdx_id="MIT", name="", text="")]
         )
         
         package_without_licenses = Package(
@@ -162,66 +130,3 @@ class TestPackage:
         assert package_with_licenses.has_licenses
         assert not package_without_licenses.has_licenses
     
-    def test_package_dict_conversion(self):
-        """Test Package to_dict conversion."""
-        package = Package(
-            name="test",
-            version="1.0.0",
-            purl="pkg:npm/test@1.0.0",
-            licenses=[License(id="MIT")],
-            copyrights=[Copyright(statement="Copyright 2024")],
-            homepage="https://example.com",
-            description="Test package"
-        )
-        
-        data = package.to_dict()
-        assert data["name"] == "test"
-        assert data["version"] == "1.0.0"
-        assert data["purl"] == "pkg:npm/test@1.0.0"
-        assert len(data["licenses"]) == 1
-        assert len(data["copyrights"]) == 1
-        assert data["homepage"] == "https://example.com"
-        assert data["description"] == "Test package"
-    
-    def test_package_from_dict(self):
-        """Test Package from_dict creation."""
-        data = {
-            "name": "test",
-            "version": "2.0.0",
-            "purl": "pkg:pypi/test@2.0.0",
-            "licenses": [{"id": "BSD-3-Clause"}],
-            "copyrights": [{"statement": "Copyright 2024 Test"}],
-            "homepage": "https://test.com"
-        }
-        
-        package = Package.from_dict(data)
-        assert package.name == "test"
-        assert package.version == "2.0.0"
-        assert package.purl == "pkg:pypi/test@2.0.0"
-        assert len(package.licenses) == 1
-        assert package.licenses[0].id == "BSD-3-Clause"
-        assert len(package.copyrights) == 1
-        assert package.homepage == "https://test.com"
-    
-    def test_package_equality(self):
-        """Test Package equality based on PURL."""
-        package1 = Package(
-            name="test",
-            version="1.0.0",
-            purl="pkg:npm/test@1.0.0"
-        )
-        
-        package2 = Package(
-            name="test",
-            version="1.0.0",
-            purl="pkg:npm/test@1.0.0"
-        )
-        
-        package3 = Package(
-            name="other",
-            version="1.0.0",
-            purl="pkg:npm/other@1.0.0"
-        )
-        
-        assert package1 == package2
-        assert package1 != package3

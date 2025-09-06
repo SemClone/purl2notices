@@ -12,6 +12,7 @@ from packageurl import PackageURL
 
 from .config import Config
 from .models import Package
+from .utils import get_archive_type, guess_purl_from_archive
 
 
 class PackageScanner:
@@ -92,11 +93,9 @@ class PackageScanner:
                 if self._is_excluded(file_path, exclude_patterns):
                     continue
                 
-                # Check by extension
-                for ext in Config.ARCHIVE_EXTENSIONS:
-                    if file.endswith(ext):
-                        archives.append(file_path)
-                        break
+                # Check if it's an archive file
+                if get_archive_type(file_path):
+                    archives.append(file_path)
         
         return archives
     
@@ -147,49 +146,36 @@ class PackageScanner:
     def _process_archive(self, archive_path: Path) -> Optional[Package]:
         """Process an archive file to extract package info."""
         try:
-            # Determine archive type and extract basic info
-            if archive_path.suffix == '.whl':
-                return self._process_wheel(archive_path)
-            elif archive_path.suffix == '.jar':
+            # Try to guess PURL from archive filename first
+            purl = guess_purl_from_archive(archive_path)
+            if purl:
+                from packageurl import PackageURL
+                parsed = PackageURL.from_string(purl)
+                return Package(
+                    purl=purl,
+                    name=parsed.name,
+                    version=parsed.version or '',
+                    type=parsed.type,
+                    namespace=parsed.namespace,
+                    source_path=str(archive_path)
+                )
+            
+            # Fallback to specific processing for complex cases
+            if archive_path.suffix == '.jar':
                 return self._process_jar(archive_path)
-            elif archive_path.suffix == '.gem':
-                return self._process_gem(archive_path)
             elif archive_path.name.endswith(('.tar.gz', '.tgz')):
                 return self._process_tarball(archive_path)
             else:
                 # Generic archive processing
+                archive_type = get_archive_type(archive_path)
                 return Package(
                     name=archive_path.stem,
+                    type=archive_type or 'archive',
                     source_path=str(archive_path)
                 )
         except Exception:
             return None
     
-    def _process_wheel(self, wheel_path: Path) -> Optional[Package]:
-        """Process Python wheel file."""
-        try:
-            # Parse wheel filename: {name}-{version}-{python}-{abi}-{platform}.whl
-            parts = wheel_path.stem.split('-')
-            if len(parts) >= 2:
-                name = parts[0].replace('_', '-')
-                version = parts[1]
-                
-                purl = PackageURL(
-                    type='pypi',
-                    name=name.lower(),
-                    version=version
-                ).to_string()
-                
-                return Package(
-                    purl=purl,
-                    name=name,
-                    version=version,
-                    type='pypi',
-                    source_path=str(wheel_path)
-                )
-        except Exception:
-            pass
-        return None
     
     def _process_jar(self, jar_path: Path) -> Optional[Package]:
         """Process Java JAR file."""
@@ -236,32 +222,6 @@ class PackageScanner:
             source_path=str(jar_path)
         )
     
-    def _process_gem(self, gem_path: Path) -> Optional[Package]:
-        """Process Ruby gem file."""
-        try:
-            # Parse gem filename: {name}-{version}.gem
-            stem = gem_path.stem
-            if '-' in stem:
-                parts = stem.rsplit('-', 1)
-                name = parts[0]
-                version = parts[1] if len(parts) > 1 else 'unknown'
-                
-                purl = PackageURL(
-                    type='gem',
-                    name=name,
-                    version=version
-                ).to_string()
-                
-                return Package(
-                    purl=purl,
-                    name=name,
-                    version=version,
-                    type='gem',
-                    source_path=str(gem_path)
-                )
-        except Exception:
-            pass
-        return None
     
     def _process_tarball(self, tarball_path: Path) -> Optional[Package]:
         """Process tarball archive."""

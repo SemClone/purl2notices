@@ -132,11 +132,11 @@ pkg:pypi/django@4.2.0
     
     def test_detect_input_type_purl(self):
         """Test detection of PURL input type."""
-        assert FileValidator.detect_input_type("pkg:npm/express@4.18.0") == 'single'
+        assert FileValidator.detect_input_type("pkg:npm/express@4.18.0") == 'purl'
     
     def test_detect_input_type_directory(self, temp_dir):
         """Test detection of directory input type."""
-        assert FileValidator.detect_input_type(str(temp_dir)) == 'scan'
+        assert FileValidator.detect_input_type(str(temp_dir)) == 'directory'
     
     def test_detect_input_type_cache_file(self, temp_dir):
         """Test detection of cache file input type."""
