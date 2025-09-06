@@ -392,8 +392,8 @@ class Purl2Notices:
                             if item.name.endswith(ext):
                                 archive_files.append(item)
                                 break
-                    elif item.is_dir() and not item.name.startswith('.'):
-                        # Skip hidden directories
+                    elif item.is_dir():
+                        # Include all directories, even hidden ones
                         scan_dir(item, current_depth + 1)
             except PermissionError:
                 logger.debug(f"Permission denied accessing: {path}")

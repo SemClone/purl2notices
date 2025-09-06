@@ -267,10 +267,9 @@ def main(
         existing = config_obj.get("scanning.exclude_patterns", [])
         existing.extend(list(exclude))
         config_obj.set("scanning.exclude_patterns", existing)
-    if not recursive:
-        config_obj.set("scanning.recursive", False)
-    if max_depth:
-        config_obj.set("scanning.max_depth", max_depth)
+    # Always set scanning configuration
+    config_obj.set("scanning.recursive", recursive)
+    config_obj.set("scanning.max_depth", max_depth)
     
     # Determine cache file
     cache_file = None
