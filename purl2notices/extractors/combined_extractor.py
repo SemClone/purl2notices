@@ -47,6 +47,9 @@ class CombinedExtractor(BaseExtractor):
     
     async def extract_from_purl(self, purl: str) -> ExtractionResult:
         """Extract information from a PURL using all available sources."""
+        # Normalize PURL - remove trailing slashes
+        purl = purl.rstrip('/')
+        
         errors = []
         all_licenses = []
         all_copyrights = []

@@ -30,6 +30,9 @@ class Purl2SrcExtractor(BaseExtractor):
             )
         
         try:
+            # Normalize PURL - remove trailing slashes
+            purl = purl.rstrip('/')
+            
             # Get download URL
             result = get_download_url(purl)
             
