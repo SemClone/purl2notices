@@ -79,15 +79,28 @@ class NoticeFormatter:
             context["packages_by_license"] = packages_by_license
             
             # Collect all license texts needed
-            if include_license_text and license_texts:
-                for license_id in packages_by_license.keys():
-                    if license_id not in context["license_texts"]:
-                        # Try to find license text from packages
-                        for pkg in packages:
-                            for lic in pkg.licenses:
-                                if lic.spdx_id == license_id and lic.text:
-                                    context["license_texts"][license_id] = lic.text
-                                    break
+            if include_license_text:
+                for license_key in packages_by_license.keys():
+                    # For combined license keys, check each individual license
+                    if ", " in license_key:
+                        # Combined licenses - aggregate texts
+                        combined_texts = []
+                        for individual_license in license_key.split(", "):
+                            if individual_license in context["license_texts"]:
+                                combined_texts.append(f"\n===== {individual_license} =====\n\n{context['license_texts'][individual_license]}")
+                        if combined_texts:
+                            context["license_texts"][license_key] = "\n".join(combined_texts)
+                    elif license_key not in context["license_texts"]:
+                        # Single license - check if we have it
+                        if license_texts and license_key in license_texts:
+                            context["license_texts"][license_key] = license_texts[license_key]
+                        else:
+                            # Try to find license text from packages
+                            for pkg in packages:
+                                for lic in pkg.licenses:
+                                    if lic.spdx_id == license_key and lic.text:
+                                        context["license_texts"][license_key] = lic.text
+                                        break
         
         # Get template
         if custom_template:
