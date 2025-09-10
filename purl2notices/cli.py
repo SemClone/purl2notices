@@ -229,7 +229,6 @@ def main(
             return
         
         # This will trigger Click's completion mechanism
-        import sys
         sys.argv = ['purl2notices']
         ctx = click.get_current_context()
         ctx.complete()
