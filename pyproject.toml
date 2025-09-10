@@ -47,6 +47,7 @@ dependencies = [
     "semantic-copycat-purl2src>=1.1.0",
     "semantic-copycat-upmex>=1.5.0",
     "semantic-copycat-oslili>=1.3.0",
+    "python-Levenshtein>=0.20.0",
     "pyyaml>=6.0",
     "python-magic>=0.4.27",
     "tqdm>=4.65.0",
