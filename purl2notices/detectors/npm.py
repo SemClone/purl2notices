@@ -38,17 +38,17 @@ class NpmDetector(BaseDetector):
         """Detect NPM packages in directory."""
         results = []
         
-        # Look for package.json
+        # Look for package.json in the directory itself
         package_json = directory / "package.json"
         if package_json.exists():
             result = self._detect_from_package_json(package_json)
             if result.detected:
                 results.append(result)
         
-        # Look for node_modules (each subdirectory is a package)
-        node_modules = directory / "node_modules"
-        if node_modules.exists() and node_modules.is_dir():
-            for package_dir in node_modules.iterdir():
+        # Check if the directory itself IS node_modules
+        if directory.name == "node_modules":
+            # Scan direct children as packages
+            for package_dir in directory.iterdir():
                 if package_dir.is_dir() and not package_dir.name.startswith('.'):
                     # Handle scoped packages
                     if package_dir.name.startswith('@'):
@@ -65,6 +65,27 @@ class NpmDetector(BaseDetector):
                             result = self._detect_from_package_json(pkg_json)
                             if result.detected:
                                 results.append(result)
+        else:
+            # Look for node_modules subdirectory
+            node_modules = directory / "node_modules"
+            if node_modules.exists() and node_modules.is_dir():
+                for package_dir in node_modules.iterdir():
+                    if package_dir.is_dir() and not package_dir.name.startswith('.'):
+                        # Handle scoped packages
+                        if package_dir.name.startswith('@'):
+                            for scoped_package in package_dir.iterdir():
+                                if scoped_package.is_dir():
+                                    pkg_json = scoped_package / "package.json"
+                                    if pkg_json.exists():
+                                        result = self._detect_from_package_json(pkg_json)
+                                        if result.detected:
+                                            results.append(result)
+                        else:
+                            pkg_json = package_dir / "package.json"
+                            if pkg_json.exists():
+                                result = self._detect_from_package_json(pkg_json)
+                                if result.detected:
+                                    results.append(result)
         
         return results
     
