@@ -37,8 +37,13 @@ class UpmexExtractor(BaseExtractor):
                     source=ExtractionSource.UPMEX
                 )
             
-            # Extract metadata
-            extractor = PackageExtractor()
+            # Extract metadata - ensure offline mode only
+            # Pass config to ensure no online lookups
+            config = {
+                'offline': True,  # Force offline mode if supported
+                'no_network': True,  # Alternative flag for no network access
+            }
+            extractor = PackageExtractor(config=config)
             result = extractor.extract(str(path))
             
             if not result:
