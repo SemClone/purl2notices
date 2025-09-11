@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2025-09-10
+
+### Added
+- Explicit offline-only mode configuration for upmex extractor
+
+### Changed
+- upmex extractor now operates strictly in offline mode to prevent network lookups
+- Improved JAR file processing reliability with fallback to oslili
+
 ## [1.1.5] - 2025-09-10
 
 ### Fixed
