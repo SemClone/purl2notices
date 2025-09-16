@@ -128,30 +128,46 @@ class Purl2Notices:
         
         packages = []
         purls_to_process = []
+        detection_metadata_map = {}  # Map PURLs to their detection metadata
         paths_to_process = []
-        
+
         # Separate detected packages by whether they have PURLs
         for detection in detection_results:
             if detection.purl:
                 purls_to_process.append(detection.purl)
+                # Store detection metadata for later use
+                detection_metadata_map[detection.purl] = detection.metadata
             else:
                 # Create package from detection
                 package = self._detection_to_package(detection)
-                if detection.metadata.get('source_file'):
+
+                # Special handling for Chef cookbooks - process the cookbook directory
+                if detection.metadata.get('type') == 'chef_cookbook' and detection.metadata.get('cookbook_dir'):
+                    paths_to_process.append((Path(detection.metadata['cookbook_dir']), package))
+                elif detection.metadata.get('source_file'):
                     paths_to_process.append((Path(detection.metadata['source_file']), package))
                 else:
                     packages.append(package)
-        
+
         # Process packages with PURLs
         if purls_to_process:
             logger.info(f"Processing {len(purls_to_process)} detected PURLs")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
+
             parallel = self.config.get("general.parallel_workers", 4)
             processed = loop.run_until_complete(
                 self.process_batch(purls_to_process, parallel)
             )
+
+            # Merge detection metadata back into processed packages
+            for pkg in processed:
+                if pkg.purl in detection_metadata_map:
+                    # Merge metadata, preserving both detection and extraction metadata
+                    detection_meta = detection_metadata_map[pkg.purl]
+                    if detection_meta:
+                        pkg.metadata.update(detection_meta)
+
             packages.extend(processed)
             loop.close()
         
@@ -282,7 +298,7 @@ class Purl2Notices:
             type=detection.package_type,
             namespace=detection.namespace
         )
-        
+
         # Add metadata
         if detection.metadata:
             package.metadata = detection.metadata
@@ -290,12 +306,28 @@ class Purl2Notices:
                 package.source_path = detection.metadata['source_file']
             elif 'source_archive' in detection.metadata:
                 package.source_path = detection.metadata['source_archive']
-        
+            elif 'cookbook_dir' in detection.metadata:
+                package.source_path = detection.metadata['cookbook_dir']
+
+            # For Chef cookbooks, convert license metadata to License objects
+            if detection.metadata.get('type') == 'chef_cookbook' and 'license' in detection.metadata:
+                from .models import License
+                license_id = detection.metadata['license']
+                package.licenses = [License(
+                    spdx_id=license_id,
+                    name=license_id,
+                    text="",
+                    source="metadata.rb"
+                )]
+
         return package
     
     def _extraction_to_package(self, package: Package, extraction: ExtractionResult) -> Package:
         """Update package with extraction results."""
-        # Add licenses
+        # Preserve existing licenses from metadata (e.g., from Chef metadata.rb)
+        existing_licenses = package.licenses.copy() if package.licenses else []
+
+        # Add licenses from extraction
         for license_info in extraction.licenses:
             # Try to load license text from SPDX if not provided
             license_text = license_info.text or ""
@@ -314,7 +346,15 @@ class Purl2Notices:
                 source=str(license_info.source.value) if license_info.source else "unknown"
             )
             package.licenses.append(license_obj)
-        
+
+        # Merge with existing licenses (if any)
+        if existing_licenses:
+            # Add back original licenses if not already present
+            existing_ids = {lic.spdx_id for lic in package.licenses}
+            for lic in existing_licenses:
+                if lic.spdx_id not in existing_ids:
+                    package.licenses.append(lic)
+
         # Add copyrights
         for copyright_info in extraction.copyrights:
             copyright_obj = Copyright(
