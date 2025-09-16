@@ -253,8 +253,8 @@ Total Packages: {{ total_packages }}
   {%- if package.source_path %}
   - Source: {{ package.source_path }}
   {%- endif %}
-  {%- if package.homepage %}
-  - Homepage: {{ package.homepage }}
+  {%- if package.metadata and package.metadata.homepage %}
+  - Homepage: {{ package.metadata.homepage }}
   {%- endif %}
 {% endfor %}
 

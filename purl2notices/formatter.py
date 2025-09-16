@@ -210,7 +210,7 @@ class NoticeFormatter:
                             "name": pkg.name,
                             "version": pkg.version,
                             "purl": pkg.purl,
-                            "homepage": pkg.homepage,
+                            "homepage": pkg.metadata.get("homepage") if pkg.metadata else None,
                             "source_path": pkg.source_path
                         }
                         for pkg in pkgs
@@ -235,7 +235,7 @@ class NoticeFormatter:
                     "version": pkg.version,
                     "purl": pkg.purl,
                     "licenses": [lic.id for lic in pkg.licenses],
-                    "homepage": pkg.homepage,
+                    "homepage": pkg.metadata.get("homepage") if pkg.metadata else None,
                     "source_path": pkg.source_path
                 }
                 
