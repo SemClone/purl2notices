@@ -67,15 +67,47 @@
         .no-license {
             background: #e74c3c;
         }
+        html {
+            scroll-behavior: smooth;
+        }
     </style>
 </head>
 <body>
     <h1>Legal Notices</h1>
     <p>This product includes software developed by third parties. The following notices apply to the included packages:</p>
 
+    <!-- Table of Contents -->
+    <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #2c3e50; margin-top: 0;">Table of Contents</h2>
+        {% if group_by_license %}
+        <ul style="list-style: none; padding-left: 0;">
+            {% for license_id, package_group in packages_by_license.items() %}
+            <li style="margin: 10px 0;">
+                <a href="#license-{{ license_id | replace(' ', '-') | replace(',', '') | replace('(', '') | replace(')', '') | lower }}"
+                   style="text-decoration: none; color: #3498db; font-weight: 500;">
+                    {{ license_id }}
+                    <span style="color: #7f8c8d; font-weight: normal;">({{ package_group | length }} package{{ 's' if package_group | length > 1 else '' }})</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <ul style="list-style: none; padding-left: 0;">
+            {% for package in packages %}
+            <li style="margin: 8px 0;">
+                <a href="#package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | lower }}-{{ package.version | replace('.', '-') }}"
+                   style="text-decoration: none; color: #3498db;">
+                    {{ package.display_name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+
     {% if group_by_license %}
     {% for license_id, package_group in packages_by_license.items() %}
-    <h2>
+    <h2 id="license-{{ license_id | replace(' ', '-') | replace(',', '') | replace('(', '') | replace(')', '') | lower }}">
         <span class="license-badge{% if license_id == 'NOASSERTION' %} no-license{% endif %}">{{ license_id }}</span>
     </h2>
     
@@ -105,7 +137,7 @@
     
     {% else %}
     {% for package in packages %}
-    <h2>{{ package.display_name }}</h2>
+    <h2 id="package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | lower }}-{{ package.version | replace('.', '-') }}">{{ package.display_name }}</h2>
     
     <div class="package-list">
         <strong>License:</strong>
@@ -135,6 +167,11 @@
     {% endif %}
     {% endfor %}
     {% endif %}
+
+    <!-- Back to top link -->
+    <div style="text-align: center; margin: 40px 0;">
+        <a href="#" style="color: #3498db; text-decoration: none;">↑ Back to Top</a>
+    </div>
 
     <hr style="margin-top: 50px; border: 1px solid #bdc3c7;">
     <p style="text-align: center; color: #7f8c8d; font-size: 0.9em;">
