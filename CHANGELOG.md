@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2025-09-15
+
+### Added
+- Table of Contents index for HTML notice files with navigation links
+- Package-based anchor IDs for direct navigation to specific packages
+- License information displayed next to each package in the index
+- Smooth scrolling CSS for better navigation experience
+- "Back to Top" link for easy return to the index
+
+### Changed
+- HTML template now lists all packages individually in the Table of Contents
+- Anchor IDs are placed on package elements rather than license headers
+- Improved support for package names with special characters (colons, slashes)
+
 ## [1.1.7] - 2025-09-10
 
 ### Fixed
