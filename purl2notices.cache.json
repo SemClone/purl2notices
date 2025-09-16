@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:b5a10d31-263f-4b0c-a112-3c6084ae8427",
+  "serialNumber": "urn:uuid:ef6bb792-f78d-4fed-81b1-3d143a8eb521",
   "version": 1,
   "metadata": {
-    "timestamp": "2025-09-16T06:42:51.260334+00:00",
+    "timestamp": "2025-09-16T06:47:06.258118+00:00",
     "tools": [
       {
         "vendor": "oscarvalenzuelab",
@@ -22,7 +22,7 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "6678e3c6-bd7a-4f06-98c9-f2c4599305ff",
+      "bom-ref": "3ac74405-9204-4d6a-90a9-b1fc1c2ac74e",
       "name": "express",
       "version": "4.18.0",
       "purl": "pkg:npm/express@4.18.0",
@@ -67,7 +67,7 @@
     },
     {
       "type": "library",
-      "bom-ref": "0a22e8c4-eafb-4e6f-bddd-35f5018704a1",
+      "bom-ref": "5d6c0628-c82b-4e8a-bd31-faf06dc8b4f8",
       "name": "lodash",
       "version": "4.17.21",
       "purl": "pkg:npm/lodash@4.17.21",
@@ -109,7 +109,7 @@
     },
     {
       "type": "library",
-      "bom-ref": "fbe559e6-a520-4fe4-8941-871823c39fe4",
+      "bom-ref": "c7e766c8-fae0-420c-9d8f-a12491a0911d",
       "name": "requests",
       "version": "2.28.0",
       "purl": "pkg:pypi/requests@2.28.0",

@@ -79,42 +79,45 @@
     <!-- Table of Contents -->
     <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <h2 style="color: #2c3e50; margin-top: 0;">Table of Contents</h2>
-        {% if group_by_license %}
         <ul style="list-style: none; padding-left: 0;">
+            {% if group_by_license %}
             {% for license_id, package_group in packages_by_license.items() %}
-            <li style="margin: 10px 0;">
-                <a href="#license-{{ license_id | replace(' ', '-') | replace(',', '') | replace('(', '') | replace(')', '') | lower }}"
-                   style="text-decoration: none; color: #3498db; font-weight: 500;">
-                    {{ license_id }}
-                    <span style="color: #7f8c8d; font-weight: normal;">({{ package_group | length }} package{{ 's' if package_group | length > 1 else '' }})</span>
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <ul style="list-style: none; padding-left: 0;">
-            {% for package in packages %}
+            {% for package in package_group %}
             <li style="margin: 8px 0;">
-                <a href="#package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | lower }}-{{ package.version | replace('.', '-') }}"
+                <a href="#package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | replace(':', '-') | lower }}-{{ package.version | replace('.', '-') | replace(':', '-') }}"
                    style="text-decoration: none; color: #3498db;">
                     {{ package.display_name }}
+                    <span style="color: #7f8c8d; font-size: 0.9em;">({{ license_id }})</span>
                 </a>
             </li>
             {% endfor %}
+            {% endfor %}
+            {% else %}
+            {% for package in packages %}
+            <li style="margin: 8px 0;">
+                <a href="#package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | replace(':', '-') | lower }}-{{ package.version | replace('.', '-') | replace(':', '-') }}"
+                   style="text-decoration: none; color: #3498db;">
+                    {{ package.display_name }}
+                    {% if package.licenses %}
+                    <span style="color: #7f8c8d; font-size: 0.9em;">({{ package.licenses | map(attribute='spdx_id') | join(', ') }})</span>
+                    {% endif %}
+                </a>
+            </li>
+            {% endfor %}
+            {% endif %}
         </ul>
-        {% endif %}
     </div>
 
     {% if group_by_license %}
     {% for license_id, package_group in packages_by_license.items() %}
-    <h2 id="license-{{ license_id | replace(' ', '-') | replace(',', '') | replace('(', '') | replace(')', '') | lower }}">
+    <h2>
         <span class="license-badge{% if license_id == 'NOASSERTION' %} no-license{% endif %}">{{ license_id }}</span>
     </h2>
-    
+
     <div class="package-list">
         <h3>Packages:</h3>
         {% for package in package_group %}
-        <div class="package-item">{{ package.display_name }}</div>
+        <div class="package-item" id="package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | replace(':', '-') | lower }}-{{ package.version | replace('.', '-') | replace(':', '-') }}">{{ package.display_name }}</div>
         {% endfor %}
     </div>
 
@@ -137,7 +140,7 @@
     
     {% else %}
     {% for package in packages %}
-    <h2 id="package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | lower }}-{{ package.version | replace('.', '-') }}">{{ package.display_name }}</h2>
+    <h2 id="package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | replace(':', '-') | lower }}-{{ package.version | replace('.', '-') | replace(':', '-') }}">{{ package.display_name }}</h2>
     
     <div class="package-list">
         <strong>License:</strong>
