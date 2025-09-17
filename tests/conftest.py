@@ -25,8 +25,10 @@ def sample_package() -> Package:
         purl="pkg:npm/test-package@1.0.0",
         licenses=[License(spdx_id="MIT", name="MIT License", text="MIT License text...")],
         copyrights=[Copyright(statement="Copyright (c) 2024 Test Author")],
-        homepage="https://example.com",
-        description="Test package description"
+        metadata={
+            "homepage": "https://example.com",
+            "description": "Test package description"
+        }
     )
 
 
