@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Full implementation of Ruby Gem and Chef cookbook detector
+- Support for Chef cookbooks with metadata.rb and metadata.json files
+- Support for Ruby gems with .gemspec files
+- Support for .gem archive detection
+- Comprehensive test coverage for Ruby/Chef detection
+- Special handling for Chef cookbooks to process entire cookbook directory
+- Metadata preservation for packages detected with PURLs
+
+### Fixed
+- Chef cookbooks in subdirectories are now detected as separate packages instead of being merged
+- License information from Chef metadata.rb is properly extracted and converted to License objects
+- Detection metadata is preserved when processing packages through PURL pipeline
+
+### Changed
+- GemDetector is no longer a stub - fully functional implementation
+- Chef cookbooks detected locally do not generate PURLs since they cannot be downloaded from registries
+- Improved core processor to handle Chef cookbooks specially by processing cookbook directories
+
 ## [1.1.8] - 2025-09-15
 
 ### Added
