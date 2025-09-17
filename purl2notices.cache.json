@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:ef6bb792-f78d-4fed-81b1-3d143a8eb521",
+  "serialNumber": "urn:uuid:5be313cd-a8d3-4280-ab33-fee29bb6680a",
   "version": 1,
   "metadata": {
-    "timestamp": "2025-09-16T06:47:06.258118+00:00",
+    "timestamp": "2025-09-16T06:53:42.243470+00:00",
     "tools": [
       {
         "vendor": "oscarvalenzuelab",
@@ -22,7 +22,7 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "3ac74405-9204-4d6a-90a9-b1fc1c2ac74e",
+      "bom-ref": "5bfde167-c2f2-4de1-8a7a-5b7b18a0084c",
       "name": "express",
       "version": "4.18.0",
       "purl": "pkg:npm/express@4.18.0",
@@ -56,6 +56,10 @@
           "value": "Copyright 2014-2015 Douglas Christopher Wilson"
         },
         {
+          "name": "copyright",
+          "value": "Copyright 2009-2013 TJ Holowaychuk; Copyright 2014-2015 Douglas Christopher Wilson; Copyright 2013 Roman Shtylman; Copyright TJ Holowaychuk; Copyright Aaron Heckmann; Copyright Ciaran Jessup; Copyright Douglas Christopher Wilson; Copyright Guillermo Rauch; Copyright Jonathan Ong"
+        },
+        {
           "name": "purl2notices:status",
           "value": "success"
         },
@@ -67,7 +71,7 @@
     },
     {
       "type": "library",
-      "bom-ref": "5d6c0628-c82b-4e8a-bd31-faf06dc8b4f8",
+      "bom-ref": "d8069775-65c5-4162-b6e1-2ce50015814d",
       "name": "lodash",
       "version": "4.17.21",
       "purl": "pkg:npm/lodash@4.17.21",
@@ -109,7 +113,7 @@
     },
     {
       "type": "library",
-      "bom-ref": "c7e766c8-fae0-420c-9d8f-a12491a0911d",
+      "bom-ref": "4d8f107e-f826-436f-aa57-eefd08c5845a",
       "name": "requests",
       "version": "2.28.0",
       "purl": "pkg:pypi/requests@2.28.0",

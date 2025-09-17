@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.9] - 2025-09-16
 
 ### Added
 - Full implementation of Ruby Gem and Chef cookbook detector
@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chef cookbooks in subdirectories are now detected as separate packages instead of being merged
 - License information from Chef metadata.rb is properly extracted and converted to License objects
 - Detection metadata is preserved when processing packages through PURL pipeline
+- Homepage property access in formatter now safely retrieves from metadata dictionary (fixes #8)
 
 ### Changed
 - GemDetector is no longer a stub - fully functional implementation
