@@ -207,3 +207,6 @@ __marimo__/
 
 # purl2notices cache files
 *.cache.json
+
+# System configuration files
+claude.md
