@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-10-16
+
+### Fixed
+- Fix KissBOM CLI parameter order mismatch that was causing validation failures
+- Update JSON format test expectations to match actual output structure
+- Enhance CombinedExtractor metadata merging to preserve upmex package identification fields
+- Ensure metadata from upmex takes precedence over oslili during merge operations
+- Remove cache file from repository to prevent accidental commits
+
+### Changed
+- Improved metadata handling in CombinedExtractor to preserve package identification data
+- Better error handling and test coverage for CLI functionality
+- Enhanced test suite reliability for JSON output format validation
+
 ## [1.1.9] - 2025-09-16
 
 ### Added
