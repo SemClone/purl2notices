@@ -176,9 +176,7 @@ cython_debug/
 #.idea/
 
 # Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
+# Abstra process automation framework directories
 .abstra/
 
 # Visual Studio Code
@@ -195,9 +193,7 @@ cython_debug/
 .pypirc
 
 # Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
+#  Cursor code editor files
 .cursorignore
 .cursorindexingignore
 
@@ -205,9 +201,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-
-# Claude.ai configuration
-claude.md
 
 # macOS files
 .DS_Store
