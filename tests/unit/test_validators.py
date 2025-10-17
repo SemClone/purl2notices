@@ -128,7 +128,7 @@ pkg:pypi/django@4.2.0
         
         is_valid, purls, error = FileValidator.validate_kissbom(kissbom_file)
         assert not is_valid
-        assert "no valid PURLs" in error.lower()
+        assert "no valid purls" in error.lower()
     
     def test_detect_input_type_purl(self):
         """Test detection of PURL input type."""

@@ -87,7 +87,7 @@ class TestPackage:
             purl="pkg:npm/express@4.18.0"
         )
         
-        assert package.display_name == "express@4.18.0"
+        assert package.display_name == "pkg:npm/express@4.18.0"
     
     def test_package_display_name_with_source(self):
         """Test Package display_name with source_path."""
@@ -98,7 +98,7 @@ class TestPackage:
             source_path="/path/to/library.jar"
         )
         
-        assert package.display_name == "library@1.0.0 (from library.jar)"
+        assert package.display_name == "pkg:maven/com.example/library@1.0.0 (from library.jar)"
     
     def test_package_license_ids(self):
         """Test Package license_ids property."""

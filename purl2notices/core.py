@@ -58,7 +58,7 @@ class Purl2Notices:
         logger.info(f"Processing PURL: {purl_string}")
         
         # Validate PURL
-        is_valid, error, parsed_purl = PurlValidator.validate(purl_string)
+        is_valid, error, parsed_purl = PurlValidator.validate_and_parse(purl_string)
         if not is_valid:
             package = Package(purl=purl_string, status=ProcessingStatus.FAILED)
             package.error_message = f"Invalid PURL: {error}"
@@ -368,7 +368,63 @@ class Purl2Notices:
         # Update metadata
         if extraction.metadata:
             package.metadata.update(extraction.metadata)
-        
+
+        # Generate PURL from extraction metadata if not already set
+        if not package.purl and extraction.metadata:
+            # First try to use direct PURL from upmex if available
+            direct_purl = extraction.metadata.get('package_purl')
+            if direct_purl:
+                # Normalize Maven PURLs to use dots instead of slashes in namespace
+                normalized_purl = self._normalize_purl(direct_purl)
+
+                from .validators import PurlValidator
+                is_valid, error = PurlValidator.validate(normalized_purl)
+                if is_valid:
+                    package.purl = normalized_purl
+                    # Update package name and version from extracted metadata
+                    package.name = extraction.metadata.get('package_name', package.name)
+                    package.version = extraction.metadata.get('package_version', package.version)
+                    # Extract type from PURL
+                    try:
+                        from packageurl import PackageURL
+                        parsed_purl = PackageURL.from_string(normalized_purl)
+                        package.type = parsed_purl.type
+                    except:
+                        pass
+            else:
+                # Fallback to generating PURL from components
+                package_name = extraction.metadata.get('package_name')
+                package_version = extraction.metadata.get('package_version')
+
+                if package_name and package_version:
+                    # Determine package type from source path if available
+                    package_type = self._determine_package_type(package.source_path, package_name)
+                    if package_type:
+                        # Generate PURL based on package type
+                        if package_type == 'pypi':
+                            purl = f"pkg:pypi/{package_name}@{package_version}"
+                        elif package_type == 'npm':
+                            purl = f"pkg:npm/{package_name}@{package_version}"
+                        elif package_type == 'maven':
+                            # For Maven, try to extract group from metadata or use package name
+                            group_id = extraction.metadata.get('group_id', package_name)
+                            purl = f"pkg:maven/{group_id}/{package_name}@{package_version}"
+                        elif package_type == 'gem':
+                            purl = f"pkg:gem/{package_name}@{package_version}"
+                        else:
+                            # Generic PURL for other types
+                            purl = f"pkg:{package_type}/{package_name}@{package_version}"
+
+                        # Validate PURL before setting
+                        from .validators import PurlValidator
+                        is_valid, error = PurlValidator.validate(purl)
+                        if is_valid:
+                            package.purl = purl
+                            # Update package name and version from extracted metadata
+                            package.name = package_name
+                            package.version = package_version
+                            package.type = package_type
+
         # Update status
         if not package.licenses:
             package.status = ProcessingStatus.NO_LICENSE
@@ -376,9 +432,61 @@ class Purl2Notices:
             package.status = ProcessingStatus.NO_COPYRIGHT
         else:
             package.status = ProcessingStatus.SUCCESS
-        
+
         return package
-    
+
+    def _determine_package_type(self, source_path: str = None, package_name: str = None) -> str:
+        """Determine package type from source path and package name."""
+        if not source_path:
+            return None
+
+        from pathlib import Path
+        path = Path(source_path)
+
+        # Determine type by file extension
+        if path.suffix == '.whl':
+            return 'pypi'
+        elif path.suffix == '.jar':
+            return 'maven'
+        elif path.suffix == '.gem':
+            return 'gem'
+        elif path.suffix in ['.tgz', '.tar.gz']:
+            # Could be npm, pypi, or other - check package name patterns
+            if package_name:
+                # npm packages often have scoped names or typical npm patterns
+                if '/' in package_name or any(word in package_name.lower() for word in ['js', 'node', 'web', 'react', 'vue', 'angular']):
+                    return 'npm'
+            return 'generic'
+        elif path.suffix == '.zip':
+            return 'generic'
+
+        return None
+
+    def _normalize_purl(self, purl: str) -> str:
+        """Normalize PURL format for better compliance."""
+        try:
+            from packageurl import PackageURL
+            parsed = PackageURL.from_string(purl)
+
+            # For Maven PURLs, convert slashes to dots in namespace
+            if parsed.type == 'maven' and parsed.namespace:
+                # Convert org/apache/maven/wrapper to org.apache.maven.wrapper
+                normalized_namespace = parsed.namespace.replace('/', '.')
+                normalized_purl = PackageURL(
+                    type=parsed.type,
+                    namespace=normalized_namespace,
+                    name=parsed.name,
+                    version=parsed.version,
+                    qualifiers=parsed.qualifiers,
+                    subpath=parsed.subpath
+                ).to_string()
+                return normalized_purl
+
+            return purl
+        except Exception:
+            # If parsing fails, return original
+            return purl
+
     def _load_license_texts(self, packages: List[Package]) -> Dict[str, str]:
         """Load SPDX license texts."""
         license_texts = {}
