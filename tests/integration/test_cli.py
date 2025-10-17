@@ -174,7 +174,14 @@ class TestCLI:
             # JSON format should be implemented
             if result.exit_code == 0:
                 output = json.loads(result.output)
-                assert 'packages' in output or 'components' in output
+                # Verify JSON structure contains expected top-level keys
+                assert 'metadata' in output
+                assert 'licenses' in output
+                # Verify metadata contains expected fields
+                assert 'total_packages' in output['metadata']
+                # Verify licenses contain packages
+                assert len(output['licenses']) > 0
+                assert 'packages' in output['licenses'][0]
     
     def test_cli_merge_cache(self):
         """Test merge-cache functionality."""
