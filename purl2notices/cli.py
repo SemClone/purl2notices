@@ -325,7 +325,7 @@ def main(
                 sys.exit(1)
             
             input_path = Path(input)
-            is_valid, error, purl_list = FileValidator.validate_kissbom(input_path)
+            is_valid, purl_list, error = FileValidator.validate_kissbom(input_path)
             
             if not is_valid:
                 click.echo(f"Error: {error}", err=True)

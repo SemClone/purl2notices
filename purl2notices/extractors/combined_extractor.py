@@ -203,11 +203,24 @@ class CombinedExtractor(BaseExtractor):
             # Always use oslili for additional extraction
             logger.debug(f"Extracting with oslili from {path}")
             oslili_result = await self.oslili.extract_from_path(path)
-            
+
             if oslili_result.success:
                 all_licenses.extend(oslili_result.licenses)
                 all_copyrights.extend(oslili_result.copyrights)
-                metadata.update(oslili_result.metadata)
+
+                # Merge oslili metadata, but preserve upmex package identification fields
+                if oslili_result.metadata:
+                    # Save package fields from upmex (if any)
+                    upmex_package_fields = {
+                        key: metadata[key] for key in ['package_name', 'package_version', 'package_purl', 'package_type']
+                        if key in metadata and metadata[key]
+                    }
+
+                    # Update with oslili metadata
+                    metadata.update(oslili_result.metadata)
+
+                    # Restore upmex package fields (they take precedence)
+                    metadata.update(upmex_package_fields)
             else:
                 errors.extend(oslili_result.errors)
             
