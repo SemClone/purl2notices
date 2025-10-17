@@ -208,3 +208,9 @@ __marimo__/
 
 # Claude.ai configuration
 claude.md
+
+# macOS files
+.DS_Store
+
+# purl2notices cache files
+*.cache.json
