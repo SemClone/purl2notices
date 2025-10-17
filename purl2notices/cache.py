@@ -70,29 +70,70 @@ class CacheManager:
     def merge(self, packages: List[Package]) -> List[Package]:
         """Merge new packages with cached ones, preserving user overrides."""
         cached = self.load()
-        
+
         # Create a map of cached packages by PURL/display_name
         cache_map = {pkg.purl or pkg.display_name: pkg for pkg in cached}
-        
+
         # Merge with intelligent handling of overrides
         for pkg in packages:
             key = pkg.purl or pkg.display_name
-            
+
             # If package is marked as disabled, skip it
             if pkg.purl and self.override_manager.is_package_disabled(pkg.purl):
                 continue
-            
-            # If package exists in cache, merge intelligently
+
+            # Try to find existing package by primary key
+            matched_pkg = None
             if key in cache_map:
-                cached_pkg = cache_map[key]
+                matched_pkg = cache_map[key]
+            else:
+                # If no direct match, try to find by alternative keys
+                # This handles cases where package gained/lost a PURL
+                for cached_key, cached_pkg in cache_map.items():
+                    if self._packages_match(pkg, cached_pkg):
+                        matched_pkg = cached_pkg
+                        # Remove old key and add under new key
+                        del cache_map[cached_key]
+                        break
+
+            if matched_pkg:
                 # Preserve user overrides from cached version
-                self._merge_package(cached_pkg, pkg)
-                cache_map[key] = cached_pkg
+                self._merge_package(matched_pkg, pkg)
+                cache_map[key] = matched_pkg
             else:
                 cache_map[key] = pkg
-        
+
         return list(cache_map.values())
-    
+
+    def _packages_match(self, pkg1: Package, pkg2: Package) -> bool:
+        """Check if two packages represent the same package."""
+        # If both have PURLs, they must match
+        if pkg1.purl and pkg2.purl:
+            return pkg1.purl == pkg2.purl
+
+        # If only one has a PURL, try to match by source_path or name
+        if pkg1.source_path and pkg2.source_path:
+            # Match by source path (filename)
+            path1 = Path(pkg1.source_path).name
+            path2 = Path(pkg2.source_path).name
+            if path1 == path2:
+                return True
+
+        # Try to match names with and without extensions
+        name1 = pkg1.name
+        name2 = pkg2.name
+
+        # Direct name match
+        if name1 == name2:
+            return True
+
+        # Try to match with/without file extensions
+        # e.g., "maven-wrapper" vs "maven-wrapper.jar"
+        name1_stem = Path(name1).stem if '.' in name1 else name1
+        name2_stem = Path(name2).stem if '.' in name2 else name2
+
+        return name1_stem == name2_stem
+
     def _merge_package(self, cached: Package, new: Package) -> None:
         """Merge new package data into cached, preserving overrides."""
         # Update basic fields from new data
@@ -100,6 +141,10 @@ class CacheManager:
             cached.version = new.version
         if new.source_path:
             cached.source_path = new.source_path
+        # Update PURL if new package has one and cached doesn't
+        if new.purl and not cached.purl:
+            cached.purl = new.purl
+            cached.type = new.type  # Also update type since it may come from PURL
         
         # Merge licenses - keep disabled ones marked
         if cached.purl:

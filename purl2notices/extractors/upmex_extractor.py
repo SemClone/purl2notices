@@ -77,6 +77,8 @@ class UpmexExtractor(BaseExtractor):
             metadata = {
                 'package_name': getattr(result, 'name', ''),
                 'package_version': getattr(result, 'version', ''),
+                'package_purl': getattr(result, 'purl', ''),  # Direct PURL from upmex
+                'package_type': str(getattr(result, 'package_type', '')),
                 'description': getattr(result, 'description', ''),
                 'homepage': getattr(result, 'homepage', ''),
                 'repository': getattr(result, 'repository', ''),
