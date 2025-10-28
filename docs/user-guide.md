@@ -22,14 +22,14 @@ purl2notices is a tool for generating legal notices (attribution to authors and 
 ### From PyPI
 
 ```bash
-pip install semantic-copycat-purl2notices
+pip install purl2notices
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices.git
-cd semantic-copycat-purl2notices
+git clone https://github.com/oscarvalenzuelab/purl2notices.git
+cd purl2notices
 pip install -e .
 ```
 
@@ -104,7 +104,7 @@ Supported archive types:
 
 When processing archives, the tool:
 1. First attempts to extract metadata using upmex (fast)
-2. Falls back to extracting and scanning contents with oslili
+2. Falls back to extracting and scanning contents with osslili
 3. Maintains proper attribution to the specific archive file
 
 ### KissBOM Files

@@ -34,7 +34,7 @@ def setup_logging(verbose: int) -> None:
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Suppress verbose warnings from semantic-copycat-oslili
+    # Suppress verbose warnings from semantic-copycat-osslili
     if verbose < 2:  # Unless in debug mode
         logging.getLogger('semantic_copycat_oslili').setLevel(logging.ERROR)
         logging.getLogger('upmex').setLevel(logging.ERROR)

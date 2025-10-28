@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5] - 2025-10-28
+
+### Changed
+- **BREAKING**: Renamed `oslili` extractor to `osslili` for consistent naming convention
+  - Renamed file: `purl2notices/extractors/oslili_extractor.py` → `osslili_extractor.py`
+  - Renamed class: `OsliliExtractor` → `OssliliExtractor`
+  - Updated enum: `ExtractionSource.OSLILI` → `ExtractionSource.OSSLILI`
+  - Updated all import statements and references throughout codebase
+- Updated package naming to remove `semantic-copycat` prefix in documentation
+  - Updated installation commands in README and docs to use `pip install purl2notices`
+  - Updated repository URLs to point to `purl2notices` instead of `semantic-copycat-purl2notices`
+  - Updated GitHub Actions examples to use new package name
+
+### Technical Details
+- Updated `purl2notices/__init__.py` version from 1.1.8 to 1.2.5
+- Modified all extractor imports in `__init__.py` and `combined_extractor.py`
+- Updated extraction source enum in base extractor class
+- Fixed all variable references in combined extractor workflow
+- Updated documentation in `README.md`, `docs/user-guide.md`, and `docs/examples.md`
+
+### Migration Notes
+- If upgrading from versions < 1.2.5, existing code using `OsliliExtractor` will need to be updated to `OssliliExtractor`
+- Cache files created with previous versions remain compatible
+- Installation package name changes from `semantic-copycat-purl2notices` to `purl2notices`
+
 ## [1.2.0] - 2025-10-16
 
 ### Fixed

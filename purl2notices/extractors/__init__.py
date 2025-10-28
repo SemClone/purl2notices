@@ -3,7 +3,7 @@
 from .base import BaseExtractor, ExtractionResult
 from .purl2src_extractor import Purl2SrcExtractor
 from .upmex_extractor import UpmexExtractor
-from .oslili_extractor import OsliliExtractor
+from .osslili_extractor import OssliliExtractor
 from .combined_extractor import CombinedExtractor
 
 __all__ = [
@@ -11,6 +11,6 @@ __all__ = [
     "ExtractionResult",
     "Purl2SrcExtractor",
     "UpmexExtractor",
-    "OsliliExtractor",
+    "OssliliExtractor",
     "CombinedExtractor",
 ]

@@ -13,7 +13,7 @@ from .base import (
 )
 from .purl2src_extractor import Purl2SrcExtractor
 from .upmex_extractor import UpmexExtractor
-from .oslili_extractor import OsliliExtractor
+from .osslili_extractor import OssliliExtractor
 
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 class CombinedExtractor(BaseExtractor):
     """
-    Combined extractor that uses purl2src, upmex, and oslili.
+    Combined extractor that uses purl2src, upmex, and osslili.
     
     Workflow:
     1. Use purl2src to get download URL
     2. Download the package
     3. Use upmex to extract metadata
-    4. Use oslili for additional extraction
+    4. Use osslili for additional extraction
     5. Combine results
     """
     
@@ -36,7 +36,7 @@ class CombinedExtractor(BaseExtractor):
         super().__init__()
         self.purl2src = Purl2SrcExtractor()
         self.upmex = UpmexExtractor()
-        self.oslili = OsliliExtractor()
+        self.osslili = OssliliExtractor()
         
         # Set up cache directory for downloads
         if cache_dir:
@@ -142,16 +142,16 @@ class CombinedExtractor(BaseExtractor):
             else:
                 errors.extend(upmex_result.errors)
             
-            # Step 4: Extract using oslili
-            logger.debug(f"Extracting with oslili from {package_path}")
-            oslili_result = await self.oslili.extract_from_path(package_path)
+            # Step 4: Extract using osslili
+            logger.debug(f"Extracting with osslili from {package_path}")
+            osslili_result = await self.osslili.extract_from_path(package_path)
             
-            if oslili_result.success:
-                all_licenses.extend(oslili_result.licenses)
-                all_copyrights.extend(oslili_result.copyrights)
-                metadata.update(oslili_result.metadata)
+            if osslili_result.success:
+                all_licenses.extend(osslili_result.licenses)
+                all_copyrights.extend(osslili_result.copyrights)
+                metadata.update(osslili_result.metadata)
             else:
-                errors.extend(oslili_result.errors)
+                errors.extend(osslili_result.errors)
             
             # Step 5: Combine and deduplicate results
             combined_licenses = self._combine_licenses(all_licenses)
@@ -181,7 +181,7 @@ class CombinedExtractor(BaseExtractor):
             )
     
     async def extract_from_path(self, path: Path) -> ExtractionResult:
-        """Extract information from a local path using upmex and oslili."""
+        """Extract information from a local path using upmex and osslili."""
         errors = []
         all_licenses = []
         all_copyrights = []
@@ -200,29 +200,29 @@ class CombinedExtractor(BaseExtractor):
                 else:
                     errors.extend(upmex_result.errors)
             
-            # Always use oslili for additional extraction
-            logger.debug(f"Extracting with oslili from {path}")
-            oslili_result = await self.oslili.extract_from_path(path)
+            # Always use osslili for additional extraction
+            logger.debug(f"Extracting with osslili from {path}")
+            osslili_result = await self.osslili.extract_from_path(path)
 
-            if oslili_result.success:
-                all_licenses.extend(oslili_result.licenses)
-                all_copyrights.extend(oslili_result.copyrights)
+            if osslili_result.success:
+                all_licenses.extend(osslili_result.licenses)
+                all_copyrights.extend(osslili_result.copyrights)
 
-                # Merge oslili metadata, but preserve upmex package identification fields
-                if oslili_result.metadata:
+                # Merge osslili metadata, but preserve upmex package identification fields
+                if osslili_result.metadata:
                     # Save package fields from upmex (if any)
                     upmex_package_fields = {
                         key: metadata[key] for key in ['package_name', 'package_version', 'package_purl', 'package_type']
                         if key in metadata and metadata[key]
                     }
 
-                    # Update with oslili metadata
-                    metadata.update(oslili_result.metadata)
+                    # Update with osslili metadata
+                    metadata.update(osslili_result.metadata)
 
                     # Restore upmex package fields (they take precedence)
                     metadata.update(upmex_package_fields)
             else:
-                errors.extend(oslili_result.errors)
+                errors.extend(osslili_result.errors)
             
             # Combine results
             combined_licenses = self._combine_licenses(all_licenses)
