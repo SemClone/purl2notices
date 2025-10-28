@@ -28,7 +28,7 @@ pip install purl2notices
 ### From Source
 
 ```bash
-git clone https://github.com/oscarvalenzuelab/purl2notices.git
+git clone https://github.com/SemClone/purl2notices.git
 cd purl2notices
 pip install -e .
 ```

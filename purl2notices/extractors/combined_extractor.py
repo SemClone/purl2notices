@@ -145,7 +145,7 @@ class CombinedExtractor(BaseExtractor):
             # Step 4: Extract using osslili
             logger.debug(f"Extracting with osslili from {package_path}")
             osslili_result = await self.osslili.extract_from_path(package_path)
-            
+
             if osslili_result.success:
                 all_licenses.extend(osslili_result.licenses)
                 all_copyrights.extend(osslili_result.copyrights)

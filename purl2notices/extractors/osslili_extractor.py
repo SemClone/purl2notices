@@ -27,7 +27,7 @@ class OssliliExtractor(BaseExtractor):
         """Extract license and copyright info using osslili."""
         try:
             try:
-                from semantic_copycat_osslili import LicenseCopyrightDetector
+                from osslili import LicenseCopyrightDetector
             except ImportError:
                 logger.warning("osslili not installed, returning empty result")
                 return ExtractionResult(
