@@ -60,7 +60,7 @@ class PackageScanner:
         metadata_packages = self._process_metadata_files(metadata_files)
         packages.extend(metadata_packages)
         
-        # If no packages found, mark entire directory for OSLILI processing
+        # If no packages found, mark entire directory for OSSLILI processing
         if not packages and not unidentified_paths:
             unidentified_paths.append(directory)
         

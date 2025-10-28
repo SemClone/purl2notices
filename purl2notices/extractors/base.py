@@ -11,7 +11,7 @@ class ExtractionSource(Enum):
     """Source of extraction."""
     PURL2SRC = "purl2src"
     UPMEX = "upmex"
-    OSLILI = "oslili"
+    OSSLILI = "osslili"
     MANUAL = "manual"
     CACHE = "cache"
 

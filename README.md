@@ -6,7 +6,7 @@ Generate legal notices (attribution to authors and copyrights) for software pack
 
 - **Multi-format support**: Process PURLs, archives (JAR/WAR/WHL), directories, and cache files
 - **12+ ecosystems**: npm, PyPI, Maven, Cargo, Go, NuGet, Conda, and more
-- **Smart extraction**: Uses multiple engines (purl2src, upmex, oslili) for accurate license detection
+- **Smart extraction**: Uses multiple engines (purl2src, upmex, osslili) for accurate license detection
 - **Flexible output**: Text/HTML with customizable Jinja2 templates
 - **Cache management**: CycloneDX format with merge capabilities
 - **Override system**: Customize licenses and filter unwanted content
@@ -14,13 +14,13 @@ Generate legal notices (attribution to authors and copyrights) for software pack
 ## Installation
 
 ```bash
-pip install semantic-copycat-purl2notices
+pip install purl2notices
 ```
 
 For development:
 ```bash
-git clone https://github.com/oscarvalenzuelab/semantic-copycat-purl2notices.git
-cd semantic-copycat-purl2notices
+git clone https://github.com/SemClone/purl2notices.git
+cd purl2notices
 pip install -e .[dev]
 ```
 

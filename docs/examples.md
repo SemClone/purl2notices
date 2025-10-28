@@ -147,7 +147,7 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Install purl2notices
-        run: pip install semantic-copycat-purl2notices
+        run: pip install purl2notices
       
       - name: Generate notices
         run: |

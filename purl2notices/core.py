@@ -236,7 +236,7 @@ class Purl2Notices:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # Configure oslili to skip archives since we processed them separately
+        # Configure osslili to skip archives since we processed them separately
         extraction = loop.run_until_complete(
             self._extract_source_code_only(directory, skip_archives=True)
         )
@@ -566,15 +566,15 @@ class Purl2Notices:
     async def _extract_source_code_only(self, directory: Path, skip_archives: bool = True) -> ExtractionResult:
         """Extract licenses from source code only, optionally skipping archives."""
         try:
-            # For now, we'll use oslili but in the future we could configure it
-            # to skip archives. Since oslili doesn't have that option yet,
+            # For now, we'll use osslili but in the future we could configure it
+            # to skip archives. Since osslili doesn't have that option yet,
             # we'll process everything and rely on the fact that we already
             # processed archives separately
-            result = await self.extractor.oslili.extract_from_path(directory)
+            result = await self.extractor.osslili.extract_from_path(directory)
             
             # Note: In a production system, we might want to filter out
             # licenses that we know came from archives we already processed
-            # This would require oslili to provide source file information
+            # This would require osslili to provide source file information
             # for each license detected
             
             return result

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5] - 2025-10-28
+
+### Changed
+- Updated project name from `semantic-copycat-purl2notices` to `purl2notices`
+- Updated GitHub repository from `oscarvalenzuelab/semantic-copycat-purl2notices` to `SemClone/purl2notices`
+- Renamed `oslili_extractor.py` to `osslili_extractor.py` for consistency with renamed dependency
+- Updated dependency from `semantic-copycat-oslili>=1.3.0` to `osslili>=1.3.0`
+- Updated dependency from `semantic-copycat-upmex>=1.5.0` to `upmex>=1.5.0`
+- Renamed extractor class from `OsliliExtractor` to `OssliliExtractor`
+- Updated enum from `ExtractionSource.OSLILI` to `ExtractionSource.OSSLILI`
+
+### Fixed
+- Fixed import statements to use renamed dependency packages (`upmex`, `osslili`)
+- Updated all documentation references to reflect new project and repository names
+- Corrected logger references for renamed extractors
+
+### Internal
+- All tests pass with renamed components and dependencies
+- Verified end-to-end functionality with both PURL processing and source code scanning
+- Updated variable references and comments throughout codebase
+
 ## [1.2.0] - 2025-10-16
 
 ### Fixed
