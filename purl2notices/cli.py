@@ -33,7 +33,7 @@ def setup_logging(verbose: int) -> None:
         level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     # Suppress verbose warnings from osslili
     if verbose < 2:  # Unless in debug mode
         logging.getLogger('osslili').setLevel(logging.ERROR)

@@ -8,23 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.5] - 2025-10-28
 
 ### Changed
-- Updated project name from `semantic-copycat-purl2notices` to `purl2notices`
-- Updated GitHub repository from `oscarvalenzuelab/semantic-copycat-purl2notices` to `SemClone/purl2notices`
-- Renamed `oslili_extractor.py` to `osslili_extractor.py` for consistency with renamed dependency
+- **BREAKING**: Renamed `oslili` extractor to `osslili` for consistent naming convention
+  - Renamed file: `purl2notices/extractors/oslili_extractor.py` → `osslili_extractor.py`
+  - Renamed class: `OsliliExtractor` → `OssliliExtractor`
+  - Updated enum: `ExtractionSource.OSLILI` → `ExtractionSource.OSSLILI`
+  - Updated all import statements and references throughout codebase
+- Updated package naming to remove `semantic-copycat` prefix in documentation
+  - Updated installation commands in README and docs to use `pip install purl2notices`
+  - Updated repository URLs to point to `SemClone/purl2notices` instead of `oscarvalenzuelab/semantic-copycat-purl2notices`
+  - Updated GitHub Actions examples to use new package name
 - Updated dependency from `semantic-copycat-oslili>=1.3.0` to `osslili>=1.3.0`
 - Updated dependency from `semantic-copycat-upmex>=1.5.0` to `upmex>=1.5.0`
-- Renamed extractor class from `OsliliExtractor` to `OssliliExtractor`
-- Updated enum from `ExtractionSource.OSLILI` to `ExtractionSource.OSSLILI`
 
 ### Fixed
 - Fixed import statements to use renamed dependency packages (`upmex`, `osslili`)
 - Updated all documentation references to reflect new project and repository names
 - Corrected logger references for renamed extractors
 
-### Internal
+### Technical Details
+- Updated `purl2notices/__init__.py` version from 1.1.8 to 1.2.5
+- Modified all extractor imports in `__init__.py` and `combined_extractor.py`
+- Updated extraction source enum in base extractor class
+- Fixed all variable references in combined extractor workflow
+- Updated documentation in `README.md`, `docs/user-guide.md`, and `docs/examples.md`
 - All tests pass with renamed components and dependencies
 - Verified end-to-end functionality with both PURL processing and source code scanning
-- Updated variable references and comments throughout codebase
+
+### Migration Notes
+- If upgrading from versions < 1.2.5, existing code using `OsliliExtractor` will need to be updated to `OssliliExtractor`
+- Cache files created with previous versions remain compatible
+- Installation package name changes from `semantic-copycat-purl2notices` to `purl2notices`
 
 ## [1.2.0] - 2025-10-16
 
