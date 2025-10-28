@@ -4,6 +4,7 @@ import logging
 import tempfile
 from pathlib import Path
 from typing import Optional, List
+from urllib.parse import urlparse, urlunparse
 import aiohttp
 import aiofiles
 
@@ -70,16 +71,33 @@ class CombinedExtractor(BaseExtractor):
                 # Extract commit/tag from URL if present
                 if '@' in vcs_url:
                     base_url, ref = vcs_url.rsplit('@', 1)
-                    # Try to convert to archive URL if it's a GitHub/GitLab URL
-                    if 'github.com' in base_url:
-                        # Extract owner/repo from URL
-                        parts = base_url.replace('https://github.com/', '').replace('.git', '').split('/')
-                        if len(parts) >= 2:
-                            download_url = f"https://github.com/{parts[0]}/{parts[1]}/archive/{ref}.tar.gz"
+                    # Parse URL properly to avoid substring matching vulnerabilities
+                    parsed_url = urlparse(base_url)
+
+                    # Check hostname explicitly to prevent URL substring attacks
+                    if parsed_url.hostname == 'github.com' and parsed_url.scheme == 'https':
+                        # Extract owner/repo from path
+                        path_parts = parsed_url.path.strip('/').replace('.git', '').split('/')
+                        if len(path_parts) >= 2:
+                            # Sanitize owner and repo names
+                            owner = path_parts[0]
+                            repo = path_parts[1]
+                            download_url = f"https://github.com/{owner}/{repo}/archive/{ref}.tar.gz"
                             logger.debug(f"Converted generic GitHub VCS URL to archive: {download_url}")
-                    elif 'gitlab' in base_url or 'git.fsfe.org' in base_url:
+                    elif parsed_url.hostname in ['gitlab.com', 'git.fsfe.org'] or (
+                        parsed_url.hostname and 'gitlab' in parsed_url.hostname.split('.')
+                    ):
                         # For GitLab-style repos, construct archive URL
-                        base_url = base_url.replace('.git', '')
+                        # Reconstruct URL without .git extension
+                        path = parsed_url.path.replace('.git', '')
+                        base_url = urlunparse((
+                            parsed_url.scheme,
+                            parsed_url.netloc,
+                            path,
+                            parsed_url.params,
+                            parsed_url.query,
+                            parsed_url.fragment
+                        ))
                         download_url = f"{base_url}/-/archive/{ref}/archive.tar.gz"
                         logger.debug(f"Converted generic GitLab VCS URL to archive: {download_url}")
                 else:
@@ -250,21 +268,33 @@ class CombinedExtractor(BaseExtractor):
             # Create filename from PURL
             from packageurl import PackageURL
             parsed = PackageURL.from_string(purl)
-            
-            # Determine extension from URL
+
+            # Determine extension from URL using proper parsing
+            url_lower = url.lower()
             extension = '.tar.gz'
-            if '.whl' in url:
+
+            # Parse URL path to get filename
+            url_path = urlparse(url).path
+            filename = url_path.split('/')[-1] if url_path else ''
+            filename_lower = filename.lower()
+
+            # Check file extension from the actual filename
+            if filename_lower.endswith('.whl'):
                 extension = '.whl'
-            elif '.jar' in url:
+            elif filename_lower.endswith('.jar'):
                 extension = '.jar'
-            elif '.gem' in url:
+            elif filename_lower.endswith('.gem'):
                 extension = '.gem'
-            elif '.zip' in url:
+            elif filename_lower.endswith('.zip'):
                 extension = '.zip'
-            elif '.nupkg' in url.lower():
+            elif filename_lower.endswith('.nupkg'):
                 extension = '.nupkg'
-            elif '.tar.bz2' in url:
+            elif filename_lower.endswith('.tar.bz2'):
                 extension = '.tar.bz2'
+            elif filename_lower.endswith('.tar.gz'):
+                extension = '.tar.gz'
+            elif filename_lower.endswith('.tgz'):
+                extension = '.tgz'
             elif parsed.type == 'nuget':
                 extension = '.nupkg'
             elif parsed.type == 'conda':
