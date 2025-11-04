@@ -20,7 +20,8 @@ class TestURLSecurityValidation:
             extractor = CombinedExtractor(cache_dir=cache_dir)
             yield extractor
 
-    def test_github_url_validation_secure(self, extractor):
+    @pytest.mark.asyncio
+    async def test_github_url_validation_secure(self, extractor):
         """Test that legitimate GitHub URLs are handled correctly."""
         test_cases = [
             ("git+https://github.com/owner/repo.git@v1.0.0", "https://github.com/owner/repo/archive/v1.0.0.tar.gz"),
