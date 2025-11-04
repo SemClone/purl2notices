@@ -2,7 +2,7 @@
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from pathlib import Path
 import tempfile
 
@@ -20,8 +20,7 @@ class TestURLSecurityValidation:
             extractor = CombinedExtractor(cache_dir=cache_dir)
             yield extractor
 
-    @pytest.mark.asyncio
-    async def test_github_url_validation_secure(self, extractor):
+    def test_github_url_validation_secure(self, extractor):
         """Test that legitimate GitHub URLs are handled correctly."""
         test_cases = [
             ("git+https://github.com/owner/repo.git@v1.0.0", "https://github.com/owner/repo/archive/v1.0.0.tar.gz"),
@@ -39,14 +38,13 @@ class TestURLSecurityValidation:
                 mock_result.download_url = None
                 mock_extract.return_value = mock_result
 
-                # Test extraction with a generic PURL
-                result = await extractor.extract_from_purl("pkg:generic/test@1.0.0")
+                # Test extraction with a generic PURL - use asyncio.run to execute
+                result = asyncio.run(extractor.extract_from_purl("pkg:generic/test@1.0.0"))
 
                 # Verify the URL was properly converted
                 assert mock_extract.called
 
-    @pytest.mark.asyncio
-    async def test_malicious_github_url_substring_attack(self, extractor):
+    def test_malicious_github_url_substring_attack(self, extractor):
         """Test that malicious URLs with 'github.com' as substring are rejected."""
         malicious_urls = [
             "git+https://evil.com?github.com@v1.0.0",
@@ -66,13 +64,12 @@ class TestURLSecurityValidation:
                 mock_extract.return_value = mock_result
 
                 # Test extraction - should not convert to GitHub archive URL
-                result = await extractor.extract_from_purl("pkg:generic/test@1.0.0")
+                result = asyncio.run(extractor.extract_from_purl("pkg:generic/test@1.0.0"))
 
                 # The malicious URL should not be converted to a GitHub archive URL
                 assert mock_extract.called
 
-    @pytest.mark.asyncio
-    async def test_gitlab_url_validation(self, extractor):
+    def test_gitlab_url_validation(self, extractor):
         """Test GitLab URL validation."""
         test_cases = [
             ("git+https://gitlab.com/owner/repo.git@v1.0.0", "gitlab.com"),
@@ -88,11 +85,10 @@ class TestURLSecurityValidation:
                 mock_result.download_url = None
                 mock_extract.return_value = mock_result
 
-                result = await extractor.extract_from_purl("pkg:generic/test@1.0.0")
+                result = asyncio.run(extractor.extract_from_purl("pkg:generic/test@1.0.0"))
                 assert mock_extract.called
 
-    @pytest.mark.asyncio
-    async def test_file_extension_detection_security(self, extractor):
+    def test_file_extension_detection_security(self, extractor):
         """Test that file extension detection is not vulnerable to path traversal."""
         test_urls = [
             ("https://example.com/package.whl", ".whl"),
@@ -116,14 +112,13 @@ class TestURLSecurityValidation:
                 mock_response.read = AsyncMock(return_value=b"test content")
                 mock_session.return_value.__aenter__.return_value.get.return_value.__aenter__.return_value = mock_response
 
-                file_path = await extractor._download_package("pkg:generic/test@1.0.0", url)
+                file_path = asyncio.run(extractor._download_package("pkg:generic/test@1.0.0", url))
 
                 if file_path:
                     # Check the file extension matches expected
                     assert file_path.suffix == expected_ext or str(file_path).endswith(expected_ext)
 
-    @pytest.mark.asyncio
-    async def test_url_without_ref(self, extractor):
+    def test_url_without_ref(self, extractor):
         """Test handling URLs without @ reference."""
         vcs_url = "git+https://github.com/owner/repo.git"
 
@@ -135,13 +130,12 @@ class TestURLSecurityValidation:
             mock_result.download_url = None
             mock_extract.return_value = mock_result
 
-            result = await extractor.extract_from_purl("pkg:generic/test@1.0.0")
+            result = asyncio.run(extractor.extract_from_purl("pkg:generic/test@1.0.0"))
 
             # Should use the URL as-is when no ref is present
             assert mock_extract.called
 
-    @pytest.mark.asyncio
-    async def test_edge_cases(self, extractor):
+    def test_edge_cases(self, extractor):
         """Test edge cases in URL handling."""
         edge_cases = [
             "git+https://github.com/owner/repo@",  # Empty ref
@@ -163,6 +157,6 @@ class TestURLSecurityValidation:
 
                 # Should handle edge cases without crashing
                 try:
-                    result = await extractor.extract_from_purl("pkg:generic/test@1.0.0")
+                    result = asyncio.run(extractor.extract_from_purl("pkg:generic/test@1.0.0"))
                 except Exception as e:
                     pytest.fail(f"Failed to handle edge case {url}: {e}")
