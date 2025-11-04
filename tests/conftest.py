@@ -118,3 +118,26 @@ def overrides_file(temp_dir):
     }
     overrides_path.write_text(yaml.dump(overrides_data))
     return overrides_path
+
+
+@pytest.fixture
+def sample_package():
+    """Create a single sample package for testing."""
+    return Package(
+        purl="pkg:npm/express@4.18.0",
+        name="express",
+        version="4.18.0",
+        licenses=[
+            License(
+                spdx_id="MIT",
+                name="MIT License",
+                text="MIT License text..."
+            )
+        ],
+        copyrights=[
+            Copyright(
+                statement="Copyright (c) 2009-2024 TJ Holowaychuk",
+                confidence=0.95
+            )
+        ]
+    )
