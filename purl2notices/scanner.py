@@ -294,7 +294,7 @@ class PackageScanner:
     def _process_package_json(self, path: Path) -> Optional[Package]:
         """Process package.json file."""
         try:
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
             name = data.get('name', '')

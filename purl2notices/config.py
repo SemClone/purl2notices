@@ -87,7 +87,7 @@ class Config:
     def load_config(self, config_file: Path) -> None:
         """Load configuration from file."""
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file, 'r', encoding='utf-8') as f:
                 user_config = yaml.safe_load(f)
                 if user_config:
                     self._merge_config(self.config, user_config)

@@ -98,7 +98,7 @@ class FileValidator:
             return False, [], f"Not a file: {file_path}"
         
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             
             purls = []
@@ -137,7 +137,7 @@ class FileValidator:
         if file_path.suffix == '.json' or file_path.name.endswith('.cdx.json') or file_path.name.endswith('.cache.json'):
             try:
                 import json
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     # Check for CycloneDX structure
                     return 'bomFormat' in data and data['bomFormat'] == 'CycloneDX'

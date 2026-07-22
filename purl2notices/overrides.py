@@ -30,7 +30,7 @@ class OverrideManager:
             }
         
         try:
-            with open(self.override_file, 'r') as f:
+            with open(self.override_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
             logger.warning(f"Failed to load overrides from {self.override_file}: {e}")
@@ -39,7 +39,7 @@ class OverrideManager:
     def save_overrides(self) -> None:
         """Save overrides to file."""
         try:
-            with open(self.override_file, 'w') as f:
+            with open(self.override_file, 'w', encoding='utf-8') as f:
                 json.dump(self.overrides, f, indent=2, sort_keys=True)
         except Exception as e:
             logger.error(f"Failed to save overrides to {self.override_file}: {e}")

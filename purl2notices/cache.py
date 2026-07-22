@@ -29,7 +29,7 @@ class CacheManager:
             return []
         
         try:
-            with open(self.cache_file, 'r') as f:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
             if data.get('bomFormat') != CACHE_FORMAT:
@@ -62,7 +62,7 @@ class CacheManager:
             # Ensure directory exists
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(self.cache_file, 'w') as f:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(bom, f, indent=2)
         except Exception as e:
             logger.warning(f"Failed to save cache: {e}")
