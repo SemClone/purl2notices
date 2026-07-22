@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-21
+
+### Added
+- Fall back to the license declared in package metadata, such as the `package.json` `license` field, when scanning a package's own files does not turn up a recognizable license. This recovers licenses that text-based detection misses, for example the canonical ISC text shipped by picocolors. A declared license never overrides one that was actually detected.
+- Mark components whose license cannot be determined as `NOASSERTION` instead of leaving them with no license at all. This applies to both the CycloneDX cache and the JSON output, so an unknown license is now explicit rather than invisible.
+
+### Fixed
+- Writing HTML notices no longer crashes on Windows or any other non-UTF-8 locale. Output files and the cache, overrides, config, and input files are now always read and written as UTF-8, so characters like the arrow used in the HTML template no longer trigger a `UnicodeEncodeError`. (#20)
+- Packages without a recognized license are no longer silently dropped from the JSON output. Since the SBOM tooling builds its component list from that output, this fixes SBOMs that quietly under-reported the dependency set. Such packages now appear under a `NOASSERTION` group. (#30)
+- Fixed a crash in the ungrouped JSON output path, which referred to a license attribute that does not exist.
+
+### Changed
+- Kept the GitHub Actions workflow dependencies up to date.
+
+## [1.2.7] - 2025-11-08
+
+### Fixed
+- Corrected the published PyPI package metadata to require a valid `purl2src` version, which fixed installation errors introduced by the 1.2.6 package. This was a metadata-only fix with no code changes.
+
 ## [1.2.6] - 2025-10-30
 
 ### Fixed
