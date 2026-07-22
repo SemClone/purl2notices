@@ -115,8 +115,15 @@ class NoticeFormatter:
         # Render template
         return template.render(**context)
     
-    def _filter_oss_packages(self, packages: List[Package]) -> List[Package]:
-        """Filter out packages with non-OSS licenses."""
+    def _filter_oss_packages(self, packages: List[Package],
+                             keep_unlicensed: bool = False) -> List[Package]:
+        """Filter out packages with non-OSS licenses.
+
+        When keep_unlicensed is True, packages with no license are retained
+        rather than dropped, so the caller can surface them as NOASSERTION.
+        This is used for machine-readable output such as SBOMs, where silently
+        omitting a component would under-report the dependency set.
+        """
         oss_packages = []
         
         licenses_dir = Path(__file__).parent / "data" / "licenses"
@@ -132,10 +139,14 @@ class NoticeFormatter:
         valid_spdx_lower = {lid.lower(): lid for lid in valid_spdx_ids}
         
         for package in packages:
-            # Skip packages without licenses
+            # Packages without a license are dropped from human-facing notices,
+            # but retained for machine-readable output so they are not silently
+            # lost (they are surfaced as NOASSERTION by the caller).
             if not package.licenses:
+                if keep_unlicensed:
+                    oss_packages.append(package)
                 continue
-            
+
             # Check if any license is non-OSS
             is_non_oss = False
             for license_info in package.licenses:
@@ -177,8 +188,11 @@ class NoticeFormatter:
                 else:
                     license_key = unique_licenses[0]
                 groups[license_key].append(package)
-            # Skip packages without licenses - don't add to any group
-        
+            else:
+                # Surface unlicensed packages explicitly under NOASSERTION so
+                # they are never silently dropped from the output.
+                groups["NOASSERTION"].append(package)
+
         # Sort groups by license ID
         return dict(sorted(groups.items()))
     
@@ -186,8 +200,9 @@ class NoticeFormatter:
                      include_copyright: bool = True, include_license_text: bool = True,
                      license_texts: Optional[Dict[str, str]] = None) -> str:
         """Format packages as JSON output."""
-        # Filter out non-OSS packages
-        oss_packages = self._filter_oss_packages(packages)
+        # Filter out non-OSS packages, but keep unlicensed ones so no component
+        # is silently dropped from machine-readable output (SBOMs).
+        oss_packages = self._filter_oss_packages(packages, keep_unlicensed=True)
         
         result = {
             "metadata": {
@@ -234,7 +249,7 @@ class NoticeFormatter:
                     "name": pkg.name,
                     "version": pkg.version,
                     "purl": pkg.purl,
-                    "licenses": [lic.id for lic in pkg.licenses],
+                    "licenses": [lic.spdx_id for lic in pkg.licenses] or ["NOASSERTION"],
                     "homepage": pkg.metadata.get("homepage") if pkg.metadata else None,
                     "source_path": pkg.source_path
                 }
