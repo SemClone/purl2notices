@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 
 from tqdm import tqdm
 
@@ -249,10 +249,59 @@ class Purl2Notices:
             )
             package = self._extraction_to_package(package, extraction)
             packages.append(package)
-        
+
         loop.close()
-        
+
+        # Fall back to the license declared in package metadata for any package
+        # whose content-based detection produced no license. This preserves
+        # authoritative declared licenses (e.g. the package.json "license"
+        # field) that the text classifier may fail to recognize, such as the
+        # canonical ISC text used by picocolors.
+        for package in packages:
+            self._apply_declared_license_fallback(package)
+
         return packages
+
+    @staticmethod
+    def _declared_license_id(declared: Any) -> Optional[str]:
+        """Normalize a declared license value from package metadata into an
+        SPDX identifier string, or None if it is unusable as one."""
+        if isinstance(declared, dict):
+            # npm's deprecated object form: {"type": "ISC", "url": "..."}
+            declared = declared.get('type') or declared.get('id') or ''
+        if not isinstance(declared, str):
+            return None
+        declared = declared.strip()
+        if not declared:
+            return None
+        lowered = declared.lower()
+        if lowered in ('unlicensed', 'none', 'unknown', 'noassertion') \
+                or lowered.startswith('see license'):
+            return None
+        return declared
+
+    def _apply_declared_license_fallback(self, package: Package) -> None:
+        """When content-based detection found no license, adopt the license
+        declared in package metadata so it is not lost. Never overrides a
+        detected license."""
+        if package.licenses:
+            return
+        declared = package.metadata.get('license') if package.metadata else None
+        spdx_id = self._declared_license_id(declared)
+        if not spdx_id:
+            return
+        package.licenses.append(License(
+            spdx_id=spdx_id,
+            name=spdx_id,
+            text="",
+            source="declared-metadata"
+        ))
+        # Refresh status now that a license is present.
+        if package.status == ProcessingStatus.NO_LICENSE:
+            package.status = (
+                ProcessingStatus.SUCCESS if package.copyrights
+                else ProcessingStatus.NO_COPYRIGHT
+            )
     
     def process_cache(self, cache_file: Path, override_file: Optional[Path] = None) -> List[Package]:
         """Load packages from cache file."""

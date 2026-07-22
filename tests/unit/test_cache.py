@@ -19,6 +19,35 @@ class TestCacheManager:
         assert manager.cache_file == cache_file
         assert not cache_file.exists()
     
+    def test_component_without_license_emits_noassertion(self, temp_dir):
+        """Regression test for #30: a component whose license could not be
+        determined must still be emitted, explicitly marked NOASSERTION, so it
+        is never silently dropped from the SBOM."""
+        manager = CacheManager(temp_dir / "test.cache.json")
+        pkg = Package(name="picocolors", version="1.1.1",
+                      purl="pkg:npm/picocolors@1.1.1")
+        assert not pkg.licenses
+
+        bom = manager._create_cyclonedx([pkg])
+
+        assert len(bom["components"]) == 1
+        component = bom["components"][0]
+        assert component["name"] == "picocolors"
+        assert component["licenses"] == [{"license": {"id": "NOASSERTION"}}]
+
+    def test_component_with_nameless_license_emits_noassertion(self, temp_dir):
+        """A license with neither an SPDX id nor a name still serializes to a
+        NOASSERTION entry rather than an empty/invalid license object."""
+        manager = CacheManager(temp_dir / "test.cache.json")
+        pkg = Package(name="mystery", version="0.0.0")
+        pkg.licenses.append(License(spdx_id="", name="", text=""))
+
+        bom = manager._create_cyclonedx([pkg])
+
+        assert bom["components"][0]["licenses"] == [
+            {"license": {"id": "NOASSERTION"}}
+        ]
+
     def test_save_packages_to_cache(self, temp_dir, sample_packages):
         """Test saving packages to cache."""
         cache_file = temp_dir / "test.cache.json"
