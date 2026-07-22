@@ -146,6 +146,58 @@ class TestCLI:
             assert result.exit_code == 0
             assert '<html>' in result.output or '<!DOCTYPE' in result.output
     
+    def test_cli_html_output_file_non_ascii_locale(self, monkeypatch):
+        """Regression test for #20: HTML notices must be written as UTF-8
+        regardless of the platform's default text encoding.
+
+        On Windows the default text encoding is cp1252, which cannot encode
+        characters such as U+2191 that appear in the HTML template, so writing
+        the output file used to crash with a UnicodeEncodeError. Here we force
+        a cp1252 default for encoding-less text opens to reproduce that
+        environment and assert the output is still written correctly.
+        """
+        import builtins
+
+        real_open = builtins.open
+
+        def cp1252_default_open(file, mode='r', *args, **kwargs):
+            if 'b' not in mode and 'encoding' not in kwargs:
+                kwargs['encoding'] = 'cp1252'
+            return real_open(file, mode, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, 'open', cp1252_default_open)
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            cache = Path('test.cache.json')
+            cache_data = {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "components": [
+                    {
+                        "type": "library",
+                        "name": "express",
+                        "version": "4.18.0",
+                        "purl": "pkg:npm/express@4.18.0",
+                        "licenses": [{"license": {"id": "MIT"}}]
+                    }
+                ]
+            }
+            cache.write_text(json.dumps(cache_data), encoding='utf-8')
+
+            output_file = Path('express.html')
+
+            result = runner.invoke(main, [
+                '--input', str(cache),
+                '--output', str(output_file),
+                '--format', 'html'
+            ])
+
+            assert result.exit_code == 0, result.output
+            assert output_file.exists()
+            content = output_file.read_text(encoding='utf-8')
+            assert '<html' in content.lower() or '<!doctype' in content.lower()
+
     def test_cli_json_format(self):
         """Test JSON output format (to be implemented)."""
         runner = CliRunner()

@@ -477,7 +477,7 @@ def main(
         has_errors = no_license_packages or failed_packages or non_oss_packages
         
         if has_errors:
-            with open(error_log_file, 'w') as f:
+            with open(error_log_file, 'w', encoding='utf-8') as f:
                 f.write(f"=== purl2notices Error Log - {datetime.now().isoformat()} ===\n\n")
                 
                 if failed_packages:
@@ -536,7 +536,7 @@ def main(
         if output:
             output_path = Path(output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w') as f:
+            with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(notices)
             logger.info(f"Legal notices written to: {output}")
         else:
