@@ -199,16 +199,23 @@ class CacheManager:
             if pkg.purl:
                 component["purl"] = pkg.purl
             
-            # Add licenses
+            # Add licenses. Always emit a licenses entry so a component whose
+            # license could not be determined is explicitly marked NOASSERTION
+            # rather than left without licenses and silently dropped by
+            # downstream SBOM consumers.
+            component["licenses"] = []
             if pkg.licenses:
-                component["licenses"] = []
                 for lic in pkg.licenses:
                     license_obj = {}
                     if lic.spdx_id and lic.spdx_id != "NOASSERTION":
                         license_obj["license"] = {"id": lic.spdx_id}
-                    else:
+                    elif lic.name:
                         license_obj["license"] = {"name": lic.name}
+                    else:
+                        license_obj["license"] = {"id": "NOASSERTION"}
                     component["licenses"].append(license_obj)
+            else:
+                component["licenses"].append({"license": {"id": "NOASSERTION"}})
             
             # Add copyright as property
             if pkg.copyrights:
