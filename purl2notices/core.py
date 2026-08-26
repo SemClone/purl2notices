@@ -620,12 +620,14 @@ class Purl2Notices:
             # we'll process everything and rely on the fact that we already
             # processed archives separately
             result = await self.extractor.osslili.extract_from_path(directory)
-            
-            # Note: In a production system, we might want to filter out
-            # licenses that we know came from archives we already processed
-            # This would require osslili to provide source file information
-            # for each license detected
-            
+
+            # A raw scan reports every license it recognises anywhere, including
+            # prose that merely names one: scanning a tree containing express
+            # picks the JSON license out of its changelog. Rank the detections
+            # the same way the PURL path does, or this door stays open.
+            if result.success and result.licenses:
+                result.licenses = self.extractor._combine_licenses(result.licenses)
+
             return result
         except Exception as e:
             logger.error(f"Error extracting from source code: {e}")

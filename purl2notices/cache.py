@@ -9,9 +9,32 @@ from typing import List, Dict, Any, Optional
 
 from .models import Package, License, Copyright, ProcessingStatus
 from .overrides import OverrideManager
-from .constants import CACHE_FORMAT, CACHE_SPEC_VERSION
+from .constants import (
+    CACHE_FORMAT, CACHE_SPEC_VERSION, CACHE_VERSION, CACHE_VERSION_PROPERTY
+)
 
 logger = logging.getLogger(__name__)
+
+
+class StaleCacheError(Exception):
+    """A cache was written by a version whose results we no longer trust.
+
+    Raised rather than returned empty because a caller that can rebuild wants
+    to rebuild, and a caller that cannot must stop: a cache read as input is
+    the whole of the input, and treating it as empty writes a notices file with
+    nothing in it, which reads exactly like a package with nothing to declare.
+    """
+
+    def __init__(self, cache_file, written_by):
+        self.cache_file = cache_file
+        self.written_by = written_by or "an unversioned build"
+        super().__init__(
+            f"{cache_file} was written by {self.written_by} and this build "
+            f"writes {CACHE_VERSION}. Licenses recorded before {CACHE_VERSION} "
+            "were not ranked by evidence and can name licenses the package "
+            "does not carry, so the file cannot be used as it stands. "
+            "Regenerate it from the original package list."
+        )
 
 
 class CacheManager:
@@ -34,6 +57,13 @@ class CacheManager:
             
             if data.get('bomFormat') != CACHE_FORMAT:
                 raise ValueError("Invalid cache format: not a CycloneDX BOM")
+
+            written_by = self._cache_version(data)
+            if written_by != CACHE_VERSION:
+                # Merging would carry the old result forward: _merge_package
+                # only adds licenses, so a license the new code no longer
+                # reports would survive in every notices file from here on.
+                raise StaleCacheError(self.cache_file, written_by)
             
             packages = self._parse_cyclonedx(data)
             
@@ -42,6 +72,11 @@ class CacheManager:
                 packages = self.override_manager.apply_overrides(packages)
             
             return packages
+        except StaleCacheError:
+            # Not a failure to read the file. The caller decides whether it can
+            # rebuild, and the generic handler below would turn it into an
+            # empty cache, which is the outcome this exists to prevent.
+            raise
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}")
             return []
@@ -69,7 +104,14 @@ class CacheManager:
     
     def merge(self, packages: List[Package]) -> List[Package]:
         """Merge new packages with cached ones, preserving user overrides."""
-        cached = self.load()
+        try:
+            cached = self.load()
+        except StaleCacheError as stale:
+            # Here the cache is an optimisation, not the input: the packages
+            # being merged in were just extracted, so discarding the old file
+            # rebuilds it rather than losing anything.
+            logger.warning(f"Rebuilding the cache: {stale}")
+            cached = []
 
         # Create a map of cached packages by PURL/display_name
         cache_map = {pkg.purl or pkg.display_name: pkg for pkg in cached}
@@ -279,8 +321,8 @@ class CacheManager:
                 ],
                 "properties": [
                     {
-                        "name": "purl2notices:cache_version",
-                        "value": "1.0"
+                        "name": CACHE_VERSION_PROPERTY,
+                        "value": CACHE_VERSION
                     }
                 ]
             },
@@ -289,6 +331,15 @@ class CacheManager:
         
         return bom
     
+    @staticmethod
+    def _cache_version(data: Dict[str, Any]) -> Optional[str]:
+        """The version of this tool's cache format the file was written by."""
+        metadata = data.get("metadata") or {}
+        for prop in metadata.get("properties") or []:
+            if prop.get("name") == CACHE_VERSION_PROPERTY:
+                return prop.get("value")
+        return None
+
     def _parse_cyclonedx(self, data: Dict[str, Any]) -> List[Package]:
         """Parse CycloneDX BOM to packages."""
         packages = []

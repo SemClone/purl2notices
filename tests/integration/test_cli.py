@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 from purl2notices.cli import main
+from purl2notices.constants import CACHE_VERSION, CACHE_VERSION_PROPERTY
 
 
 class TestCLI:
@@ -66,6 +67,9 @@ class TestCLI:
             cache_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -94,6 +98,9 @@ class TestCLI:
             cache_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -126,6 +133,9 @@ class TestCLI:
             cache_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -173,6 +183,9 @@ class TestCLI:
             cache_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -206,6 +219,9 @@ class TestCLI:
             cache_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -244,6 +260,9 @@ class TestCLI:
             cache1_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -260,6 +279,9 @@ class TestCLI:
             cache2_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",
@@ -292,6 +314,9 @@ class TestCLI:
             cache_data = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "metadata": {"properties": [
+                    {"name": CACHE_VERSION_PROPERTY, "value": CACHE_VERSION}
+                ]},
                 "components": [
                     {
                         "type": "library",

@@ -16,6 +16,45 @@ class ExtractionSource(Enum):
     CACHE = "cache"
 
 
+# How a detector arrived at a license. These are osslili's own category values,
+# so they are matched as it spells them: "third-party" carries a hyphen, and an
+# underscore is accepted only because an earlier build used one. Getting the
+# spelling wrong is silent, since a category that matches nothing simply never
+# excludes anything.
+CATEGORY_DECLARED = "declared"
+CATEGORY_DETECTED = "detected"
+CATEGORY_REFERENCED = "referenced"
+CATEGORY_THIRD_PARTY = "third-party"
+THIRD_PARTY_CATEGORIES = frozenset({"third-party", "third_party"})
+
+MATCH_LICENSE_FILE = "license_file"
+# osslili reports this when a whole license text matches inside a file that is
+# not named like a license file, which is how a vendored source file carrying a
+# complete license reads. Unlike a keyword hit, the text is actually there.
+MATCH_TEXT_SIMILARITY = "text_similarity"
+
+
+def is_third_party(license_info) -> bool:
+    """Whether this license belongs to code the package bundles, not to it."""
+    return license_info.category in THIRD_PARTY_CATEGORIES
+
+
+def evidence_rank(license_info) -> int:
+    """How strong the evidence behind a license is. Higher wins.
+
+    Used wherever two records for the same license have to be reduced to one,
+    so that a package's own declaration outranks a passing mention of it and
+    the record that survives is the one that can still be justified.
+    """
+    if is_third_party(license_info):
+        return 0
+    if license_info.category == CATEGORY_DECLARED:
+        return 3
+    if license_info.match_type == MATCH_LICENSE_FILE:
+        return 2
+    return 1
+
+
 @dataclass
 class LicenseInfo:
     """License information."""
@@ -24,7 +63,13 @@ class LicenseInfo:
     text: Optional[str] = None
     source: ExtractionSource = ExtractionSource.MANUAL
     confidence: float = 1.0
-    
+    # Where this came from. Defaults describe a license the package declares,
+    # which is what every source other than a full-tree scan reports.
+    category: str = CATEGORY_DECLARED
+    match_type: Optional[str] = None
+    detection_method: Optional[str] = None
+    source_file: Optional[str] = None
+
     def __hash__(self):
         return hash((self.spdx_id, self.name))
 
@@ -176,11 +221,31 @@ class BaseExtractor(ABC):
         )
     
     def deduplicate_licenses(self, licenses: List[LicenseInfo]) -> List[LicenseInfo]:
-        """Remove duplicate licenses, keeping the one with highest confidence."""
+        """Remove duplicate licenses, keeping the best-evidenced record.
+
+        Confidence alone is the wrong tiebreak here, and it runs before anything
+        ranks evidence: a package that declares MIT and also mentions it in a
+        readme can score the mention higher, and dropping the declaration turns
+        MIT into a mention that a later filter is then entitled to discard.
+        """
         seen = {}
         for license_info in licenses:
-            key = (license_info.spdx_id, license_info.name)
-            if key not in seen or license_info.confidence > seen[key].confidence:
+            # Bundled licenses are deduplicated separately from the package's
+            # own. Sharing a key lets a readme that merely mentions MIT outrank
+            # the MIT in a third-party notice, erase the category that marked it
+            # as bundled, and take the attribution down with it.
+            key = (
+                license_info.spdx_id,
+                license_info.name,
+                is_third_party(license_info),
+            )
+            best = seen.get(key)
+            if best is None:
+                seen[key] = license_info
+                continue
+            candidate = (evidence_rank(license_info), license_info.confidence)
+            incumbent = (evidence_rank(best), best.confidence)
+            if candidate > incumbent:
                 seen[key] = license_info
         return list(seen.values())
     

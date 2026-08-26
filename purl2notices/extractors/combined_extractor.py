@@ -10,7 +10,9 @@ import aiofiles
 
 from .base import (
     BaseExtractor, ExtractionResult, ExtractionSource,
-    LicenseInfo, CopyrightInfo
+    LicenseInfo, CopyrightInfo,
+    CATEGORY_DECLARED, MATCH_LICENSE_FILE, MATCH_TEXT_SIMILARITY,
+    evidence_rank, is_third_party
 )
 from .purl2src_extractor import Purl2SrcExtractor
 from .upmex_extractor import UpmexExtractor
@@ -334,28 +336,165 @@ class CombinedExtractor(BaseExtractor):
                 return True
         return False
     
+    def _stated_licenses(self, licenses: List[LicenseInfo]) -> List[LicenseInfo]:
+        """Narrow a scan's detections to the licenses the package actually has.
+
+        Two different things get reported as licenses. A package *states* its
+        license, in metadata or a license file. A scan also *recognises* license
+        wording anywhere it appears, and prose that names a license reads much
+        like the license itself: express's changelog matches the JSON license at
+        0.85, and urllib3 and cryptography have the same shape in their changelog
+        and docs. Treated as equals, those become declared licenses, and we tell
+        a customer their express dependency carries the JSON license, whose
+        "Good, not Evil" clause most policies forbid.
+
+        So take the strongest kind of evidence present and stop there, rather
+        than filtering on a confidence number. A keyword hit on a changelog is
+        not weak evidence that the package is JSON-licensed; it is evidence of
+        something else, and no threshold separates those. urllib3 shows why the
+        number cannot be trusted on its own: its phantom JSON arrives from one
+        detector at 0.85 and from another at 0.983 labelled exact.
+
+        The tiers come from the detector's own classification rather than being
+        re-derived here. That is a deliberate limit: a detector that files a
+        changelog hit under "declared" defeats this, which is what numpy's
+        vendored tree does today, so this narrows what a scan reports without
+        claiming to be a second opinion on it.
+
+        A claim also has to be checkable. Detections that name the file they came
+        from can be ranked this way; detections that do not cannot be. Those are
+        kept only where a traceable declaration agrees, which is what removes the
+        JSON from urllib3, the BSD-4-Clause from click and the BSD-3-Clause from
+        packaging. When nothing traceable is declared, they are kept regardless,
+        because then no traceable detection read the package's own metadata and
+        an unsourced one may be the only thing that did.
+
+        Licenses the package carries rather than claims are never ranked against
+        its own and are never dropped: a third-party notice, and a whole license
+        text found in a file not named like a license file. typescript declares
+        Apache-2.0 and ships a ThirdPartyNoticeText.txt carrying MIT and
+        CC-BY-4.0 for code compiled into typescript.js; that code has no PURL of
+        its own, so if this omits it nothing will attribute it. Overstating a
+        license and omitting one are both wrong, and only the first is fixed by
+        narrowing.
+
+        Dual licensing survives all of this: cryptography and packaging each
+        declare two licenses in their own metadata, and both are kept.
+        """
+        if not licenses:
+            return []
+
+        # Set aside everything that is present in the package rather than
+        # claimed by it. Neither kind competes with the package's own license,
+        # and neither is dropped for losing that competition.
+        carried = [lic for lic in licenses if self._is_carried(lic)]
+        own = [lic for lic in licenses if not self._is_carried(lic)]
+        if not own:
+            return carried
+
+        traceable = [lic for lic in own if lic.source_file]
+        untraceable = [lic for lic in own if not lic.source_file]
+
+        if not traceable:
+            # Nothing can be ranked. Reporting what we have beats reporting
+            # nothing, and there is no basis here for dropping any of it.
+            return own + carried
+
+        selected = self._strongest_evidence(traceable)
+
+        if not any(lic.category == CATEGORY_DECLARED for lic in traceable):
+            return selected + untraceable + carried
+
+        supported = {lic.spdx_id for lic in selected}
+        kept = [lic for lic in untraceable if lic.spdx_id in supported]
+        return selected + kept + carried
+
+    @staticmethod
+    def _is_carried(license_info: LicenseInfo) -> bool:
+        """Whether this license is present in the package rather than claimed.
+
+        Two kinds. A third-party notice names the license of code the package
+        bundles. A whole license text matching inside a file not named like a
+        license file, which is how a vendored source carrying a complete
+        license reads, is that license's text genuinely shipping.
+
+        Both are omissions if dropped, and an omission in an attribution file
+        is worse than the overclaim this narrowing exists to fix. Neither is
+        ranked against what the package declares about itself.
+        """
+        if is_third_party(license_info):
+            return True
+        return (
+            license_info.category != CATEGORY_DECLARED
+            and license_info.match_type == MATCH_TEXT_SIMILARITY
+        )
+
+    def _strongest_evidence(self, licenses: List[LicenseInfo]) -> List[LicenseInfo]:
+        """Pick the tier of evidence to answer from, strongest first.
+
+        Only the package's own licenses reach here; bundled ones are set aside
+        by the caller rather than competing with them.
+        """
+        declared = [lic for lic in licenses if lic.category == CATEGORY_DECLARED]
+        if declared:
+            return declared
+
+        # Nothing declared. A license file is still the package speaking about
+        # itself, even with no metadata behind it. osslili does not currently
+        # emit this combination, which is why nothing below the declared tier
+        # fires against it today; the ordering is here so a detector that does
+        # emit it ranks the way it should.
+        from_license_file = [
+            lic for lic in licenses if lic.match_type == MATCH_LICENSE_FILE
+        ]
+        if from_license_file:
+            return from_license_file
+
+        # Only mentions left. Report the single best one rather than every
+        # license the package's prose happens to name.
+        return [max(licenses, key=lambda lic: lic.confidence)]
+
     def _combine_licenses(self, licenses: List[LicenseInfo]) -> List[LicenseInfo]:
-        """Combine licenses from multiple sources, preferring higher confidence."""
+        """Combine licenses from multiple sources, keeping the best evidenced."""
+        licenses = self._stated_licenses(licenses)
         combined = {}
-        
+
         for license_info in licenses:
             key = (license_info.spdx_id, license_info.name)
-            
-            if key not in combined:
+            existing = combined.get(key)
+
+            if existing is None:
                 combined[key] = license_info
-            else:
-                # Keep the one with higher confidence or more complete info
-                existing = combined[key]
-                if (license_info.confidence > existing.confidence or
-                    (license_info.text and not existing.text)):
-                    combined[key] = license_info
-                elif license_info.text and existing.text:
-                    # Merge text if different
-                    if len(license_info.text) > len(existing.text):
-                        existing.text = license_info.text
-        
+                continue
+
+            if self._better_evidenced(license_info, existing):
+                # Do not lose license text by preferring a leaner record.
+                if existing.text and not license_info.text:
+                    license_info.text = existing.text
+                combined[key] = license_info
+            elif license_info.text and len(license_info.text) > len(existing.text or ''):
+                existing.text = license_info.text
+
         return list(combined.values())
-    
+
+    @staticmethod
+    def _better_evidenced(candidate: LicenseInfo, existing: LicenseInfo) -> bool:
+        """Whether candidate is the record worth keeping for this license.
+
+        Provenance comes first. A record with no file behind it can carry any
+        confidence at all, so ranking on the number alone replaced a license
+        file match with a record nobody can check.
+        """
+        if bool(candidate.source_file) != bool(existing.source_file):
+            return bool(candidate.source_file)
+        candidate_rank = evidence_rank(candidate)
+        existing_rank = evidence_rank(existing)
+        if candidate_rank != existing_rank:
+            return candidate_rank > existing_rank
+        if candidate.confidence != existing.confidence:
+            return candidate.confidence > existing.confidence
+        return bool(candidate.text) and not existing.text
+
     def _combine_copyrights(self, copyrights: List[CopyrightInfo]) -> List[CopyrightInfo]:
         """Combine copyrights from multiple sources, removing duplicates."""
         seen_statements = set()

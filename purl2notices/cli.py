@@ -12,7 +12,7 @@ import click
 from . import __version__
 from .core import Purl2Notices
 from .config import Config
-from .cache import CacheManager
+from .cache import CacheManager, StaleCacheError
 from .validators import FileValidator
 from .constants import NON_OSS_INDICATORS, COMMON_OSS_PATTERNS
 from .models import Package, ProcessingStatus
@@ -396,7 +396,15 @@ def main(
                 sys.exit(1)
             
             logger.info(f"Loading from cache: {input}")
-            packages = processor.process_cache(cache_path, overrides)
+            try:
+                packages = processor.process_cache(cache_path, overrides)
+            except StaleCacheError as stale:
+                # The cache is the whole input here and nothing rewrites it, so
+                # carrying on would write an empty notices file on every run
+                # from now on, and an empty notices file reads like a package
+                # with nothing to declare.
+                click.echo(f"Error: {stale}", err=True)
+                sys.exit(1)
         
         # Merge additional cache files if provided
         if merge_cache:
@@ -406,7 +414,13 @@ def main(
                 if merge_path.exists():
                     logger.info(f"Merging cache from: {merge_path}")
                     merge_manager = CacheManager(merge_path, Path("purl2notices.overrides.json"))
-                    merge_packages = merge_manager.load(apply_overrides=False)
+                    try:
+                        merge_packages = merge_manager.load(apply_overrides=False)
+                    except StaleCacheError as stale:
+                        # These packages were asked for by name. Skipping them
+                        # would drop them from the notices without saying so.
+                        click.echo(f"Error: {stale}", err=True)
+                        sys.exit(1)
                     
                     # Add to packages list
                     existing_purls = {pkg.purl for pkg in packages if pkg.purl}
