@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .base import (
     BaseExtractor, ExtractionResult, ExtractionSource,
-    LicenseInfo, CopyrightInfo
+    LicenseInfo, CopyrightInfo, CATEGORY_DECLARED
 )
 
 
@@ -59,7 +59,16 @@ class OssliliExtractor(BaseExtractor):
                         name=getattr(lic_data, 'name', '') or getattr(lic_data, 'spdx_id', ''),
                         text=getattr(lic_data, 'text', ''),
                         source=ExtractionSource.OSSLILI,
-                        confidence=getattr(lic_data, 'confidence', 0.8)
+                        confidence=getattr(lic_data, 'confidence', 0.8),
+                        # osslili already separates a license the package
+                        # states from one it merely mentions, and names the file
+                        # each came from. Carrying that through is what lets the
+                        # combining step rank them; the output model does not
+                        # hold it yet, so the notices file cannot show it.
+                        category=getattr(lic_data, 'category', None) or CATEGORY_DECLARED,
+                        match_type=getattr(lic_data, 'match_type', None),
+                        detection_method=getattr(lic_data, 'detection_method', None),
+                        source_file=getattr(lic_data, 'source_file', None),
                     )
                     licenses.append(license_info)
             

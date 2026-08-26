@@ -62,7 +62,21 @@ class UpmexExtractor(BaseExtractor):
                         spdx_id=self.normalize_license_id(lic_data.spdx_id or lic_data.name or ''),
                         name=lic_data.name or lic_data.spdx_id or '',
                         text=lic_data.text or '',
-                        source=ExtractionSource.UPMEX
+                        source=ExtractionSource.UPMEX,
+                        # upmex reports its own confidence, and defaulting to
+                        # 1.0 let a 0.97 near-miss outrank a license file match.
+                        # Only a missing value falls back: a reported 0.0 means
+                        # no confidence, not full confidence.
+                        confidence=(
+                            1.0 if getattr(lic_data, 'confidence', None) is None
+                            else lic_data.confidence
+                        ),
+                        # upmex carries a file path and usually leaves it empty.
+                        # Where it is set, the license can be ranked like any
+                        # other traceable one instead of needing a second
+                        # detector to vouch for it.
+                        source_file=getattr(lic_data, 'file_path', None),
+                        detection_method=getattr(lic_data, 'detection_method', None),
                     )
                     licenses.append(license_info)
             

@@ -46,7 +46,10 @@ dependencies = [
     "packageurl-python>=0.11.0",
     "purl2src>=1.2.3",
     "upmex>=1.5.0",
-    "osslili>=1.3.0",
+    # 1.7.5 is the first version whose LicenseCategory carries "third-party";
+    # below it, licenses belonging to bundled code cannot be told apart from
+    # the package's own.
+    "osslili>=1.7.5",
     "python-Levenshtein>=0.20.0",
     "pyyaml>=6.0",
     "python-magic>=0.4.27",

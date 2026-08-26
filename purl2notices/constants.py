@@ -17,7 +17,14 @@ COMMON_OSS_PATTERNS = [
 # Cache format constants
 CACHE_FORMAT = "CycloneDX"
 CACHE_SPEC_VERSION = "1.6"
-CACHE_VERSION = "1.0"
+
+# Our own cache version, independent of the CycloneDX spec version above. Bump
+# it whenever a change alters what extraction produces for the same input, so a
+# cache written by the older code is discarded rather than merged forward.
+# 2.0: licenses are ranked by evidence, so caches from before that carry
+# licenses the package does not have (express and urllib3 cached as JSON).
+CACHE_VERSION = "2.0"
+CACHE_VERSION_PROPERTY = "purl2notices:cache_version"
 
 # Archive extensions by ecosystem (based on upmex extractors)
 DEFAULT_ARCHIVE_EXTENSIONS = {
