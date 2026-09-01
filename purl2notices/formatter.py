@@ -8,6 +8,8 @@ from jinja2 import Environment, FileSystemLoader, Template
 
 from .models import Package
 from .constants import NON_OSS_INDICATORS, COMMON_OSS_PATTERNS
+from .utils import (agreed_license_text, bundled_license_text,
+                    package_license_text)
 
 
 class NoticeFormatter:
@@ -95,12 +97,25 @@ class NoticeFormatter:
                         if license_texts and license_key in license_texts:
                             context["license_texts"][license_key] = license_texts[license_key]
                         else:
-                            # Try to find license text from packages
-                            for pkg in packages:
-                                for lic in pkg.licenses:
-                                    if lic.spdx_id == license_key and lic.text:
-                                        context["license_texts"][license_key] = lic.text
-                                        break
+                            # Try to find license text from packages. Only a
+                            # text every package under this id agrees on can
+                            # stand for the group: taking the first would put
+                            # one package's copyright holders on the others,
+                            # and would also undo the same decision already
+                            # made when the texts were loaded.
+                            neutral = bundled_license_text(license_key)
+                            agreed = agreed_license_text(
+                                package_license_text(
+                                    (lic.text for lic in pkg.licenses
+                                     if lic.spdx_id == license_key),
+                                    neutral=neutral,
+                                )
+                                for pkg in packages
+                                if any(lic.spdx_id == license_key
+                                       for lic in pkg.licenses)
+                            )
+                            if agreed:
+                                context["license_texts"][license_key] = agreed
         
         # Get template
         if custom_template:

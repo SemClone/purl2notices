@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- The license text emitted is the one the package ships, rather than the SPDX
+  template with its `<year>` and `<copyright holders>` fields still literal,
+  next to the real holders already detected a few lines above (#38).
+- osslili names the file a license was found in but does not carry its
+  contents, so that file is now read. Where a package was scanned as an
+  archive, the name is a path inside it rather than one on disk, and is read
+  from the archive.
+- Reducing several records for one license to one no longer discards the
+  loser's text. Only the record naming a file carries the shipped text, and it
+  is not always the best-evidenced one.
+- Text no longer moves between a record for the package's own license and one
+  for code it carries. A vendored notice standing in for the package's own
+  license attributes it to whoever wrote the vendored code.
+
+### Changed
+- Where packages grouped under one license id ship different texts, or where
+  one of them ships none, the canonical SPDX license is shown rather than one
+  package's. The output holds a single text per license id, and a text with
+  copyright holders in it belongs to the package that shipped it.
+
 ## [1.3.0] - 2026-07-21
 
 ### Added

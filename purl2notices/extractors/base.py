@@ -39,6 +39,24 @@ def is_third_party(license_info) -> bool:
     return license_info.category in THIRD_PARTY_CATEGORIES
 
 
+def is_carried(license_info) -> bool:
+    """Whether this license is present in the package rather than claimed by it.
+
+    Two kinds. A third-party notice names the license of code the package
+    bundles. A whole license text matching inside a file not named like a
+    license file is how a vendored source carrying a complete license reads.
+
+    Text must never move across this line. A vendored notice standing in for
+    the package's own license attributes it to whoever wrote the vendored code.
+    """
+    if is_third_party(license_info):
+        return True
+    return (
+        license_info.category != CATEGORY_DECLARED
+        and license_info.match_type == MATCH_TEXT_SIMILARITY
+    )
+
+
 def evidence_rank(license_info) -> int:
     """How strong the evidence behind a license is. Higher wins.
 
@@ -245,8 +263,22 @@ class BaseExtractor(ABC):
                 continue
             candidate = (evidence_rank(license_info), license_info.confidence)
             incumbent = (evidence_rank(best), best.confidence)
+            # The key separates third-party from own, but not the broader
+            # carried boundary, so two records here can still differ about
+            # whether the license is the package's own.
+            same_provenance = is_carried(license_info) == is_carried(best)
+
             if candidate > incumbent:
+                # Only the record naming a file carries the text the package
+                # ships, and it is not always the best-evidenced one. Losing it
+                # here leaves the SPDX template as the only text available, which
+                # is emitted with its placeholders still literal.
+                if same_provenance and best.text and not license_info.text:
+                    license_info.text = best.text
                 seen[key] = license_info
+            elif (same_provenance and license_info.text
+                    and len(license_info.text) > len(best.text or '')):
+                best.text = license_info.text
         return list(seen.values())
     
     def deduplicate_copyrights(self, copyrights: List[CopyrightInfo]) -> List[CopyrightInfo]:
