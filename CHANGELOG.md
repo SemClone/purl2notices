@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-01
 
 ### Fixed
 - A package's own license is separated from the licenses of code it carries
@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a license that requires the text to ship.
 - Two carried components under the same license keep both notices, since they
   are differently filled and both are owed attribution.
+
+### Breaking
+- `Package.license_ids` means the licenses the package is under. It previously
+  included the licenses of code the package carries, so a consumer reading it
+  as "what is this package licensed under" was being told something else. The
+  rest is reachable as `bundled_license_ids`.
+- Caches written before 2.1 are refused. They cannot say which licenses belong
+  to carried code, so reading one would reintroduce exactly the overclaim this
+  release fixes. Regenerate from the original package list.
+- The notices output gains a bundled components section, and a package is no
+  longer grouped under the licenses of code it carries.
 
 ### Changed
 - `Package.license_ids` means the licenses the package is under.
