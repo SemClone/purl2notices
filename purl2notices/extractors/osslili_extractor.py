@@ -9,7 +9,8 @@ from typing import Optional
 
 from .base import (
     BaseExtractor, ExtractionResult, ExtractionSource,
-    LicenseInfo, CopyrightInfo, CATEGORY_DECLARED
+    LicenseInfo, CopyrightInfo, CATEGORY_DECLARED, CATEGORY_THIRD_PARTY,
+    THIRD_PARTY_CATEGORIES, detection_root, is_bundled_path
 )
 
 
@@ -27,6 +28,21 @@ class OssliliExtractor(BaseExtractor):
     # than a file that merely states an identifier. package.json declares
     # "license": "MIT"; reading it as license text would emit JSON.
     LICENSE_FILE_MATCH_TYPES = frozenset({"license_file", "license_text", "full_text"})
+
+    @staticmethod
+    def _category_for(lic_data, root: str) -> str:
+        """The category to record, correcting for what the path says.
+
+        A detector category is only overridden towards third-party, never away
+        from it: a path that looks like the package's own does not make a
+        license the detector called third-party into a declaration.
+        """
+        category = getattr(lic_data, 'category', None) or CATEGORY_DECLARED
+        if category in THIRD_PARTY_CATEGORIES:
+            return category
+        if is_bundled_path(getattr(lic_data, 'source_file', None), root):
+            return CATEGORY_THIRD_PARTY
+        return category
 
     def _shipped_license_text(self, lic_data, root: Path) -> Optional[str]:
         """Read the license as the package actually ships it.
@@ -175,6 +191,21 @@ class OssliliExtractor(BaseExtractor):
             # Parse licenses
             licenses = []
             if hasattr(result, 'licenses') and result.licenses:
+                # osslili has a third-party category but does not assign it, so
+                # the licenses of code a package carries arrive labelled exactly
+                # like the package's own. The path each was found at is the
+                # signal it does give: a package states its own terms at its
+                # root, and a license under a subdirectory came with the code
+                # there. Without this the whole tree reads as one declaration,
+                # so numpy reports the licenses of everything it vendors as
+                # its own.
+                root = detection_root(
+                    (getattr(lic, 'source_file', None) for lic in result.licenses),
+                    # A directory was scanned as itself, so its own path is the
+                    # root. An archive is reported relative to itself, and the
+                    # top-level directory inside it has to be derived.
+                    scanned_root=path if path.is_dir() else None,
+                )
                 for lic_data in result.licenses:
                     license_info = LicenseInfo(
                         spdx_id=self.normalize_license_id(
@@ -191,7 +222,7 @@ class OssliliExtractor(BaseExtractor):
                         # each came from. Carrying that through is what lets the
                         # combining step rank them; the output model does not
                         # hold it yet, so the notices file cannot show it.
-                        category=getattr(lic_data, 'category', None) or CATEGORY_DECLARED,
+                        category=self._category_for(lic_data, root),
                         match_type=getattr(lic_data, 'match_type', None),
                         detection_method=getattr(lic_data, 'detection_method', None),
                         source_file=getattr(lic_data, 'source_file', None),

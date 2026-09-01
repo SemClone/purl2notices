@@ -23,7 +23,7 @@ CACHE_SPEC_VERSION = "1.6"
 # cache written by the older code is discarded rather than merged forward.
 # 2.0: licenses are ranked by evidence, so caches from before that carry
 # licenses the package does not have (express and urllib3 cached as JSON).
-CACHE_VERSION = "2.0"
+CACHE_VERSION = "2.1"
 CACHE_VERSION_PROPERTY = "purl2notices:cache_version"
 
 # Archive extensions by ecosystem (based on upmex extractors)

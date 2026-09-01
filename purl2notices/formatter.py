@@ -106,13 +106,13 @@ class NoticeFormatter:
                             neutral = bundled_license_text(license_key)
                             agreed = agreed_license_text(
                                 package_license_text(
-                                    (lic.text for lic in pkg.licenses
+                                    (lic.text for lic in pkg.own_licenses
                                      if lic.spdx_id == license_key),
                                     neutral=neutral,
                                 )
                                 for pkg in packages
                                 if any(lic.spdx_id == license_key
-                                       for lic in pkg.licenses)
+                                       for lic in pkg.own_licenses)
                             )
                             if agreed:
                                 context["license_texts"][license_key] = agreed
@@ -157,14 +157,20 @@ class NoticeFormatter:
             # Packages without a license are dropped from human-facing notices,
             # but retained for machine-readable output so they are not silently
             # lost (they are surfaced as NOASSERTION by the caller).
-            if not package.licenses:
-                if keep_unlicensed:
+            if not package.own_licenses:
+                # Nothing is known about the package's own terms. It still has
+                # to appear when it carries licensed code, since that code ships
+                # and an attribution file that omits it is incomplete.
+                if keep_unlicensed or package.bundled_licenses:
                     oss_packages.append(package)
                 continue
 
-            # Check if any license is non-OSS
+            # Check if any license is non-OSS. Only the package's own licenses
+            # are asked about: dropping a package because code it carries is
+            # under something unrecognised removes an entry that was owed
+            # attribution, and answers a question about the wrong thing.
             is_non_oss = False
-            for license_info in package.licenses:
+            for license_info in package.own_licenses:
                 license_id = (license_info.spdx_id or license_info.name or '').lower()
                 
                 # Check if it's a known non-OSS license
@@ -195,14 +201,24 @@ class NoticeFormatter:
         groups = defaultdict(list)
         
         for package in packages:
-            if package.licenses:
-                # For packages with multiple licenses, list under combined key
-                unique_licenses = list(dict.fromkeys(lic.spdx_id for lic in package.licenses))
+            # A package is grouped under the license it is under, not under the
+            # licenses of code it carries. Putting them in one key says numpy is
+            # licensed under all six of the licenses it bundles, and an LGPL on
+            # a line that reads as the package's own terms changes what a policy
+            # check decides. What it carries is listed with the package instead.
+            own = [lic for lic in package.licenses if not lic.bundled]
+            if own:
+                unique_licenses = list(dict.fromkeys(lic.spdx_id for lic in own))
                 if len(unique_licenses) > 1:
                     license_key = ", ".join(sorted(unique_licenses))
                 else:
                     license_key = unique_licenses[0]
                 groups[license_key].append(package)
+            elif package.licenses:
+                # Everything found belongs to carried code. Saying nothing about
+                # the package's own terms is the honest answer, and dropping it
+                # would lose the attribution its carried code is owed.
+                groups["NOASSERTION"].append(package)
             else:
                 # Surface unlicensed packages explicitly under NOASSERTION so
                 # they are never silently dropped from the output.
@@ -241,7 +257,17 @@ class NoticeFormatter:
                             "version": pkg.version,
                             "purl": pkg.purl,
                             "homepage": pkg.metadata.get("homepage") if pkg.metadata else None,
-                            "source_path": pkg.source_path
+                            "source_path": pkg.source_path,
+                            # The licenses of code this package carries. They
+                            # are not what the package is under, so they are
+                            # reported beside it rather than in "id", and not
+                            # dropped, since that code does ship.
+                            "bundled_licenses": [
+                                {"id": lic.spdx_id, "text": lic.text}
+                                if include_license_text and lic.text
+                                else {"id": lic.spdx_id}
+                                for lic in pkg.distinct_bundled_licenses
+                            ],
                         }
                         for pkg in pkgs
                     ]
@@ -264,7 +290,13 @@ class NoticeFormatter:
                     "name": pkg.name,
                     "version": pkg.version,
                     "purl": pkg.purl,
-                    "licenses": [lic.spdx_id for lic in pkg.licenses] or ["NOASSERTION"],
+                    "licenses": pkg.license_ids or ["NOASSERTION"],
+                    "bundled_licenses": [
+                        {"id": lic.spdx_id, "text": lic.text}
+                        if include_license_text and lic.text
+                        else {"id": lic.spdx_id}
+                        for lic in pkg.distinct_bundled_licenses
+                    ],
                     "homepage": pkg.metadata.get("homepage") if pkg.metadata else None,
                     "source_path": pkg.source_path
                 }
@@ -299,9 +331,14 @@ class NoticeFormatter:
         for package in oss_packages:
             lines.append(f"Package: {package.display_name}")
             
-            if include_license and package.licenses:
-                license_ids = ", ".join(lic.spdx_id for lic in package.licenses)
-                lines.append(f"License: {license_ids}")
+            if include_license:
+                lines.append(
+                    f"License: {', '.join(package.license_ids) or 'NOASSERTION'}"
+                )
+                if package.bundled_license_ids:
+                    lines.append(
+                        f"Bundles: {', '.join(package.bundled_license_ids)}"
+                    )
             
             if include_copyright and package.copyrights:
                 lines.append("Copyright:")

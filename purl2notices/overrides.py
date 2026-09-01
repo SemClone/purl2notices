@@ -214,7 +214,8 @@ class OverrideManager:
                         "value": copyright_text
                     })
             
-            # Filter disabled licenses
+            # Filter disabled licenses. Each entry carries its own provenance
+            # and text, so dropping one leaves the rest correct.
             disabled_licenses = self.get_disabled_licenses(purl)
             if disabled_licenses and "licenses" in component:
                 component["licenses"] = [
@@ -228,15 +229,13 @@ class OverrideManager:
                 if "licenses" not in component:
                     component["licenses"] = []
                 for license_id, license_data in custom_licenses.items():
-                    component["licenses"].append({
-                        "license": {"id": license_id}
-                    })
-                    # Add license text if provided
-                    if license_data.get("text") and "properties" in component:
-                        component["properties"].append({
-                            "name": f"purl2notices:license_text:{license_id}",
-                            "value": license_data["text"]
-                        })
+                    license_body = {"id": license_id}
+                    if license_data.get("text"):
+                        license_body["text"] = {
+                            "contentType": "text/plain",
+                            "content": license_data["text"],
+                        }
+                    component["licenses"].append({"license": license_body})
             
             filtered_components.append(component)
         

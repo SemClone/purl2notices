@@ -457,12 +457,13 @@ def main(
         for pkg in packages:
             if pkg.status.value in ['unavailable', 'failed']:
                 failed_packages.append((pkg.display_name, pkg.error_message or 'Unknown error'))
-            elif not pkg.licenses:
+            elif not pkg.own_licenses:
                 no_license_packages.append(pkg.display_name)
                 logger.error(f"No license found for package: {pkg.display_name}")
             else:
-                # Check for non-SPDX or commercial licenses
-                for license_info in pkg.licenses:
+                # Check for non-SPDX or commercial licenses. The package's
+                # own, not those of code it carries.
+                for license_info in pkg.own_licenses:
                     license_id = (license_info.spdx_id or license_info.name or '').lower()
                     
                     # Check if it's a known non-OSS license

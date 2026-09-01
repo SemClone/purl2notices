@@ -12,6 +12,7 @@ from .config import Config
 from .validators import PurlValidator
 from .cache import CacheManager
 from .formatter import NoticeFormatter
+from .extractors.base import is_carried
 from .utils import (agreed_license_text, bundled_license_text,
                     package_license_text)
 from .detectors import DetectorRegistry, DetectorResult
@@ -286,7 +287,9 @@ class Purl2Notices:
         """When content-based detection found no license, adopt the license
         declared in package metadata so it is not lost. Never overrides a
         detected license."""
-        if package.licenses:
+        # Licenses belonging to carried code say nothing about the package's own
+        # terms, so they must not suppress the declared-metadata fallback.
+        if package.own_licenses:
             return
         declared = package.metadata.get('license') if package.metadata else None
         spdx_id = self._declared_license_id(declared)
@@ -394,16 +397,19 @@ class Purl2Notices:
                 spdx_id=license_info.spdx_id,
                 name=license_info.name,
                 text=license_text,
-                source=str(license_info.source.value) if license_info.source else "unknown"
+                source=str(license_info.source.value) if license_info.source else "unknown",
+                bundled=is_carried(license_info),
             )
             package.licenses.append(license_obj)
 
         # Merge with existing licenses (if any)
         if existing_licenses:
             # Add back original licenses if not already present
-            existing_ids = {lic.spdx_id for lic in package.licenses}
+            existing_ids = {
+                (lic.spdx_id, lic.bundled) for lic in package.licenses
+            }
             for lic in existing_licenses:
-                if lic.spdx_id not in existing_ids:
+                if (lic.spdx_id, lic.bundled) not in existing_ids:
                     package.licenses.append(lic)
 
         # Add copyrights
@@ -476,8 +482,9 @@ class Purl2Notices:
                             package.version = package_version
                             package.type = package_type
 
-        # Update status
-        if not package.licenses:
+        # Update status. A package whose only licenses belong to code it carries
+        # has told us nothing about itself, which is what NO_LICENSE means.
+        if not package.own_licenses:
             package.status = ProcessingStatus.NO_LICENSE
         elif not package.copyrights:
             package.status = ProcessingStatus.NO_COPYRIGHT
@@ -545,7 +552,7 @@ class Purl2Notices:
         # Collect needed licenses
         needed_licenses = set()
         for package in packages:
-            for license_obj in package.licenses:
+            for license_obj in package.own_licenses:
                 if license_obj.spdx_id and license_obj.spdx_id != "NOASSERTION":
                     needed_licenses.add(license_obj.spdx_id)
         
@@ -560,11 +567,12 @@ class Purl2Notices:
             # the answer of last resort rather than whichever comes first.
             per_package = [
                 package_license_text(
-                    (lic.text for lic in package.licenses if lic.spdx_id == spdx_id),
+                    (lic.text for lic in package.own_licenses
+                     if lic.spdx_id == spdx_id),
                     neutral=bundled,
                 )
                 for package in packages
-                if any(lic.spdx_id == spdx_id for lic in package.licenses)
+                if any(lic.spdx_id == spdx_id for lic in package.own_licenses)
             ]
 
             # A holder-filled license text belongs to the package that shipped
