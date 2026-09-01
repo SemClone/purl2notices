@@ -1,7 +1,7 @@
 """Utility functions for purl2notices."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from .constants import DEFAULT_ARCHIVE_EXTENSIONS
 
@@ -104,3 +104,73 @@ def guess_purl_from_archive(archive_path: Path) -> Optional[str]:
             return f"pkg:npm/{name}@{version}"
     
     return None
+
+def license_text_identity(text: Optional[str]) -> Optional[str]:
+    """How two copies of a license text are told apart.
+
+    Two packages shipping the same license should not read as disagreeing
+    because one uses CRLF or leaves trailing spaces on a line.
+    """
+    if text is None:
+        return None
+    return "\n".join(line.rstrip() for line in text.strip().splitlines())
+
+
+def package_license_text(texts: Iterable[str], neutral: Optional[str] = None) -> Optional[str]:
+    """What one package ships for a license, ignoring the canonical text.
+
+    Every record with no text of its own is given the canonical license, so a
+    package usually carries both that and whatever it actually ships. Only the
+    latter says anything about this package.
+    """
+    neutral_key = license_text_identity(neutral)
+    seen = {}
+    for text in texts:
+        if not text:
+            continue
+        key = license_text_identity(text)
+        if key != neutral_key:
+            seen.setdefault(key, text)
+    # More than one is this package disagreeing with itself, which is not an
+    # answer about what it ships. Taking the first would pick by list order.
+    if len(seen) == 1:
+        return next(iter(seen.values()))
+    return None
+
+
+def agreed_license_text(
+    package_texts: Iterable[Optional[str]], neutral: Optional[str] = None
+) -> Optional[str]:
+    """The one text that speaks for every package sharing a license id.
+
+    Takes one entry per package: what that package ships, or None where it
+    ships nothing. Returns None unless every package agrees.
+
+    A package that ships nothing has not agreed, it is unknown, and lending it
+    another package's copyright holders is the misattribution this exists to
+    prevent. Naming one package's text for a group would do exactly that, and
+    an attribution file saying nothing beats one saying whose.
+    """
+    seen = {}
+    unknown = False
+    for text in package_texts:
+        if not text:
+            unknown = True
+            continue
+        seen.setdefault(license_text_identity(text), text)
+    if len(seen) == 1 and not unknown:
+        return next(iter(seen.values()))
+    return None
+
+
+def bundled_license_text(spdx_id: str) -> Optional[str]:
+    """The canonical SPDX text purl2notices ships for an id, if it has one."""
+    import purl2notices
+
+    path = Path(purl2notices.__file__).parent / "data" / "licenses" / f"{spdx_id}.txt"
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None

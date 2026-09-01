@@ -12,6 +12,8 @@ from .config import Config
 from .validators import PurlValidator
 from .cache import CacheManager
 from .formatter import NoticeFormatter
+from .utils import (agreed_license_text, bundled_license_text,
+                    package_license_text)
 from .detectors import DetectorRegistry, DetectorResult
 from .extractors import CombinedExtractor, ExtractionResult
 
@@ -539,7 +541,6 @@ class Purl2Notices:
     def _load_license_texts(self, packages: List[Package]) -> Dict[str, str]:
         """Load SPDX license texts."""
         license_texts = {}
-        spdx_dir = Path(__file__).parent / "data" / "licenses"
         
         # Collect needed licenses
         needed_licenses = set()
@@ -550,27 +551,37 @@ class Purl2Notices:
         
         # Load license texts
         for spdx_id in needed_licenses:
-            # First check if any package already has the text
-            for package in packages:
-                for license_obj in package.licenses:
-                    if license_obj.spdx_id == spdx_id and license_obj.text:
-                        license_texts[spdx_id] = license_obj.text
-                        break
-                if spdx_id in license_texts:
-                    break
-            
-            # If not found, try to load from bundled licenses
-            if spdx_id not in license_texts:
-                license_file = spdx_dir / f"{spdx_id}.txt"
-                if license_file.exists():
-                    try:
-                        with open(license_file, 'r', encoding='utf-8') as f:
-                            license_texts[spdx_id] = f.read()
-                    except Exception as e:
-                        logger.error(f"Failed to load license text for {spdx_id}: {e}")
-        
+            bundled = bundled_license_text(spdx_id)
+
+            # Every record with no text of its own is given the bundled SPDX
+            # template earlier on, so a template record and a shipped one can
+            # both exist for the same id. The template is generic and carries
+            # its `<year>` and `<copyright holders>` fields unfilled, so it is
+            # the answer of last resort rather than whichever comes first.
+            per_package = [
+                package_license_text(
+                    (lic.text for lic in package.licenses if lic.spdx_id == spdx_id),
+                    neutral=bundled,
+                )
+                for package in packages
+                if any(lic.spdx_id == spdx_id for lic in package.licenses)
+            ]
+
+            # A holder-filled license text belongs to the package that shipped
+            # it, and the output holds one text per license id. So a shipped
+            # text can only stand for the group when the whole group agrees on
+            # it. A package that shipped nothing has not agreed: it is unknown,
+            # and lending it another package's holders is the misattribution
+            # this guards against. The canonical license attributes nothing, so
+            # it is what a group that does not agree gets, and the holders are
+            # listed separately per package either way.
+            chosen = agreed_license_text(per_package) or bundled
+
+            if chosen:
+                license_texts[spdx_id] = chosen
+
         return license_texts
-    
+
     def _find_archive_files(self, directory: Path, max_depth: int = 3) -> List[Path]:
         """Find all archive files in a directory recursively."""
         from .constants import ARCHIVE_EXTENSIONS

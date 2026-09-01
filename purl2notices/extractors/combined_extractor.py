@@ -12,7 +12,7 @@ from .base import (
     BaseExtractor, ExtractionResult, ExtractionSource,
     LicenseInfo, CopyrightInfo,
     CATEGORY_DECLARED, MATCH_LICENSE_FILE, MATCH_TEXT_SIMILARITY,
-    evidence_rank, is_third_party
+    evidence_rank, is_third_party, is_carried
 )
 from .purl2src_extractor import Purl2SrcExtractor
 from .upmex_extractor import UpmexExtractor
@@ -467,12 +467,23 @@ class CombinedExtractor(BaseExtractor):
                 combined[key] = license_info
                 continue
 
+            # This bucket is keyed on the license alone, so a record for code
+            # the package vendors can share it with the package's own. Text may
+            # move between records that agree about which they are, never
+            # across: a vendored notice standing in for the package's own
+            # license attributes it to whoever wrote the vendored code.
+            # _is_carried rather than is_third_party, because a whole license
+            # text found outside a license file is vendored code shipping its
+            # license too, and this class already draws the line there.
+            same_provenance = is_carried(license_info) == is_carried(existing)
+
             if self._better_evidenced(license_info, existing):
                 # Do not lose license text by preferring a leaner record.
-                if existing.text and not license_info.text:
+                if same_provenance and existing.text and not license_info.text:
                     license_info.text = existing.text
                 combined[key] = license_info
-            elif license_info.text and len(license_info.text) > len(existing.text or ''):
+            elif (same_provenance and license_info.text
+                    and len(license_info.text) > len(existing.text or '')):
                 existing.text = license_info.text
 
         return list(combined.values())
