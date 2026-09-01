@@ -12,7 +12,7 @@ from .base import (
     BaseExtractor, ExtractionResult, ExtractionSource,
     LicenseInfo, CopyrightInfo,
     CATEGORY_DECLARED, MATCH_LICENSE_FILE, MATCH_TEXT_SIMILARITY,
-    evidence_rank, is_third_party, is_carried
+    evidence_rank, is_third_party, is_carried, _dedupe_key
 )
 from .purl2src_extractor import Purl2SrcExtractor
 from .upmex_extractor import UpmexExtractor
@@ -460,7 +460,7 @@ class CombinedExtractor(BaseExtractor):
         combined = {}
 
         for license_info in licenses:
-            key = (license_info.spdx_id, license_info.name)
+            key = _dedupe_key(license_info)
             existing = combined.get(key)
 
             if existing is None:

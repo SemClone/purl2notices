@@ -13,7 +13,12 @@ from .constants import (
     CACHE_FORMAT, CACHE_SPEC_VERSION, CACHE_VERSION, CACHE_VERSION_PROPERTY
 )
 
+from .utils import license_text_identity
+
 logger = logging.getLogger(__name__)
+
+# Marks a license entry as belonging to code the package carries.
+BUNDLED_LICENSE_PROPERTY = "purl2notices:bundled"
 
 
 class StaleCacheError(Exception):
@@ -195,9 +200,21 @@ class CacheManager:
             new_licenses = [lic for lic in new.licenses 
                           if lic.spdx_id not in disabled_licenses]
             # Add new licenses not in cached
-            cached_license_ids = {lic.spdx_id for lic in cached.licenses}
+            # Keyed on provenance too: a carried BSD-3-Clause already in the
+            # cache does not mean the package's own BSD-3-Clause is known.
+            def identity(lic):
+                # Carried notices under one license differ by their text, and
+                # both are owed attribution, so merging on the id alone drops
+                # one of them.
+                return (
+                    lic.spdx_id,
+                    lic.bundled,
+                    license_text_identity(lic.text) if lic.bundled else None,
+                )
+
+            cached_license_ids = {identity(lic) for lic in cached.licenses}
             for lic in new_licenses:
-                if lic.spdx_id not in cached_license_ids:
+                if identity(lic) not in cached_license_ids:
                     cached.licenses.append(lic)
         else:
             cached.licenses = new.licenses
@@ -248,14 +265,29 @@ class CacheManager:
             component["licenses"] = []
             if pkg.licenses:
                 for lic in pkg.licenses:
-                    license_obj = {}
                     if lic.spdx_id and lic.spdx_id != "NOASSERTION":
-                        license_obj["license"] = {"id": lic.spdx_id}
+                        license_body = {"id": lic.spdx_id}
                     elif lic.name:
-                        license_obj["license"] = {"name": lic.name}
+                        license_body = {"name": lic.name}
                     else:
-                        license_obj["license"] = {"id": "NOASSERTION"}
-                    component["licenses"].append(license_obj)
+                        license_body = {"id": "NOASSERTION"}
+
+                    if lic.text:
+                        license_body["text"] = {
+                            "contentType": "text/plain",
+                            "content": lic.text,
+                        }
+
+                    # Whether this belongs to code the package carries lives on
+                    # the entry itself rather than as a position recorded
+                    # elsewhere, so nothing has to be kept in step when the list
+                    # is filtered or reordered.
+                    if lic.bundled:
+                        license_body["properties"] = [
+                            {"name": BUNDLED_LICENSE_PROPERTY, "value": "true"}
+                        ]
+
+                    component["licenses"].append({"license": license_body})
             else:
                 component["licenses"].append({"license": {"id": "NOASSERTION"}})
             
@@ -294,13 +326,6 @@ class CacheManager:
                     "value": pkg.error_message
                 })
             
-            # Store license texts separately
-            for lic in pkg.licenses:
-                if lic.text:
-                    component["properties"].append({
-                        "name": f"purl2notices:license_text:{lic.spdx_id}",
-                        "value": lic.text
-                    })
             
             components.append(component)
         
@@ -361,13 +386,20 @@ class CacheManager:
                 
                 spdx_id = license_data.get("id", "")
                 name = license_data.get("name", "")
-                
+
                 if spdx_id or name:
+                    bundled = any(
+                        prop.get("name") == BUNDLED_LICENSE_PROPERTY
+                        and str(prop.get("value", "")).lower() == "true"
+                        for prop in license_data.get("properties", [])
+                    )
+                    text_body = license_data.get("text") or {}
                     license = License(
                         spdx_id=spdx_id or "NOASSERTION",
                         name=name or spdx_id,
-                        text="",  # Will be loaded from properties
-                        source="cache"
+                        text=text_body.get("content", "") if isinstance(text_body, dict) else "",
+                        source="cache",
+                        bundled=bundled,
                     )
                     pkg.licenses.append(license)
             
@@ -387,13 +419,6 @@ class CacheManager:
                     pkg.source_path = prop_value
                 elif prop_name == "purl2notices:error":
                     pkg.error_message = prop_value
-                elif prop_name.startswith("purl2notices:license_text:"):
-                    # Match license text to license
-                    spdx_id = prop_name.replace("purl2notices:license_text:", "")
-                    for lic in pkg.licenses:
-                        if lic.spdx_id == spdx_id:
-                            lic.text = prop_value
-                            break
             
             packages.append(pkg)
         

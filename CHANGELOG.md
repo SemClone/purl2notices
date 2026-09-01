@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A package's own license is separated from the licenses of code it carries
+  (#39). numpy reported ten licenses under one heading; it is BSD-3-Clause, and
+  the rest belongs to a vendored meson tree, bundled wheel runtime libraries and
+  LICENSES_bundled.txt. Reading as numpy being under all ten changes what a
+  policy check decides.
+- osslili has a third-party category but never assigns it, so the path a license
+  was found at is the signal: a package states its own terms at its root, and a
+  license under a subdirectory came with the code there. Ecosystem locations
+  that hold a package's own license (META-INF, LICENSES, .dist-info, .egg-info)
+  are allowed one level in, and an Apache-2.0 NOTICE is read as the package's
+  own attribution.
+- Licenses of carried code are reported with their texts rather than dropped.
+  Naming a bundled LGPL without its text leaves the notices file incomplete for
+  a license that requires the text to ship.
+- Two carried components under the same license keep both notices, since they
+  are differently filled and both are owed attribution.
+
+### Changed
+- `Package.license_ids` means the licenses the package is under.
+  `bundled_license_ids` and `bundled_licenses` carry the rest, and grouping,
+  the OSS filter, the NO_LICENSE status and the CLI report all ask about the
+  package's own.
+- The cache records whether a license belongs to carried code, and its text, on
+  the CycloneDX license entry itself. `CACHE_VERSION` moves to 2.1; caches
+  written before it are refused, as they cannot distinguish the two.
+
+
+### Fixed
 - The license text emitted is the one the package ships, rather than the SPDX
   template with its `<year>` and `<copyright holders>` fields still literal,
   next to the real holders already detected a few lines above (#38).

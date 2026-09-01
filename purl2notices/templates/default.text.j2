@@ -34,6 +34,24 @@ Copyright Notices:
 --------------------------------------------------------------------------------
 {% endfor %}
 {% endif %}
+{% if package_group | selectattr('bundled_licenses') | list %}
+
+Bundled components, licensed separately from the above:
+{% for package in package_group %}
+{% if package.bundled_licenses %}
+  {{ package.display_name }} carries:
+{% for lic in package.distinct_bundled_licenses %}
+    - {{ lic.spdx_id }}
+{% if include_license_text and lic.text %}
+{{ lic.spdx_id }} License Text (bundled with {{ package.display_name }}):
+--------------------------------------------------------------------------------
+{{ lic.text }}
+--------------------------------------------------------------------------------
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
 
 {% endfor %}
 {% else %}
@@ -51,11 +69,24 @@ Copyright Notices:
 {% endif %}
 
 {% if include_license_text %}
-{% for license in package.licenses %}
+{% for license in package.own_licenses %}
 {{ license.spdx_id }} License Text:
 --------------------------------------------------------------------------------
 {{ license.text if license.text else 'License text not available' }}
 --------------------------------------------------------------------------------
+{% endfor %}
+{% endif %}
+{% if package.bundled_licenses %}
+
+Bundled components, licensed separately from the above:
+{% for lic in package.distinct_bundled_licenses %}
+  - {{ lic.spdx_id }}
+{% if include_license_text and lic.text %}
+{{ lic.spdx_id }} License Text (bundled):
+--------------------------------------------------------------------------------
+{{ lic.text }}
+--------------------------------------------------------------------------------
+{% endif %}
 {% endfor %}
 {% endif %}
 

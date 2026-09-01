@@ -98,8 +98,8 @@
                 <a href="#package-{{ package.name | replace(' ', '-') | replace('@', '') | replace('/', '-') | replace(':', '-') | lower }}-{{ package.version | replace('.', '-') | replace(':', '-') }}"
                    style="text-decoration: none; color: #3498db;">
                     {{ package.display_name }}
-                    {% if package.licenses %}
-                    <span style="color: #7f8c8d; font-size: 0.9em;">({{ package.licenses | map(attribute='spdx_id') | join(', ') }})</span>
+                    {% if package.license_ids %}
+                    <span style="color: #7f8c8d; font-size: 0.9em;">({{ package.license_ids | join(', ') }})</span>
                     {% endif %}
                 </a>
             </li>
@@ -132,6 +132,23 @@
     </div>
     {% endif %}
 
+    {% set has_carried = package_group | selectattr('bundled_licenses') | list %}
+    {% if has_carried %}
+    <p><strong>Bundled components, licensed separately from the above:</strong></p>
+    <ul>
+      {% for package in package_group %}{% if package.bundled_licenses %}
+      <li>{{ package.display_name }} carries:
+        {% for lic in package.distinct_bundled_licenses %}<span class="license-badge">{{ lic.spdx_id }}</span>{% endfor %}
+      </li>
+      {% endif %}{% endfor %}
+    </ul>
+    {% if include_license_text %}
+    {% for package in package_group %}{% for lic in package.distinct_bundled_licenses %}{% if lic.text %}
+    <h3>{{ lic.spdx_id }} License Text (bundled with {{ package.display_name }}):</h3>
+    <div class="license-text">{{ lic.text }}</div>
+    {% endif %}{% endfor %}{% endfor %}
+    {% endif %}
+    {% endif %}
     {% if include_license_text %}
     <h3>License Text:</h3>
     <div class="license-text">{{ license_texts.get(license_id, 'License text not available') }}</div>
@@ -152,6 +169,20 @@
         <span class="license-badge no-license">NOASSERTION</span>
         {% endif %}
     </div>
+    {% if package.bundled_license_ids %}
+    <div class="package-list">
+        <strong>Bundles, licensed separately:</strong>
+        {% for license_id in package.bundled_license_ids %}
+        <span class="license-badge">{{ license_id }}</span>
+        {% endfor %}
+    </div>
+    {% if include_license_text %}
+    {% for lic in package.distinct_bundled_licenses %}{% if lic.text %}
+    <h3>{{ lic.spdx_id }} License Text (bundled):</h3>
+    <div class="license-text">{{ lic.text }}</div>
+    {% endif %}{% endfor %}
+    {% endif %}
+    {% endif %}
 
     {% if include_copyright and package.copyrights %}
     <div class="copyright-section">
@@ -163,7 +194,7 @@
     {% endif %}
 
     {% if include_license_text %}
-    {% for license in package.licenses %}
+    {% for license in package.own_licenses %}
     <h3>{{ license.spdx_id }} License Text:</h3>
     <div class="license-text">{{ license.text if license.text else 'License text not available' }}</div>
     {% endfor %}
