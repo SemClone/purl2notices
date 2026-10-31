@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "purl2notices"
-version = "2.0.0"
+dynamic = ["version"]
 description = "Generate legal notices (attribution to authors and copyrights) for software packages"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -87,6 +87,9 @@ Issues = "https://github.com/SemClone/purl2notices/issues"
 [tool.setuptools]
 packages = ["purl2notices"]
 include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "purl2notices.__version__"}
 
 [tool.setuptools.package-data]
 purl2notices = [

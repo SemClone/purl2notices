@@ -137,7 +137,8 @@ GitHub release is published and authenticates with PyPI trusted publishing throu
 environment.
 
 ```bash
-# 1. Bump the version in pyproject.toml and purl2notices/__init__.py, add a CHANGELOG entry, merge it
+# 1. Bump __version__ in purl2notices/__init__.py (pyproject.toml reads it from there),
+#    rename the CHANGELOG's [Unreleased] heading to the new version, merge it
 # 2. Tag the release commit
 git tag -a vX.Y.Z -m "Release X.Y.Z"
 git push origin vX.Y.Z
