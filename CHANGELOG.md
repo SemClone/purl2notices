@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `--offline` scans a directory from local files only: no registry lookups and
+  no package downloads (#4). Each detected package is read from the directory
+  its metadata file sits in, so the LICENSE and NOTICE files and the copyright
+  headers it ships are what the notices are built from, and archives are read
+  in place rather than re-fetched. For air-gapped machines and CI without
+  egress.
+- A bare PURL or a KissBOM file names packages in a registry and nothing local,
+  so `--offline` refuses those inputs. Accepting them would report every
+  package as unavailable and still write a notices file, which reads like a
+  project with nothing to declare.
+
+### Fixed
+- Two `Config` objects in one process no longer share their defaults. The
+  nested dicts and lists came from a shallow copy of the class attribute, so
+  one config calling `set()`, or the CLI appending an exclude pattern, changed
+  the defaults for every config built afterwards.
+
 ## [2.0.0] - 2026-09-01
 
 ### Fixed
