@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Any
 import yaml
 from platformdirs import user_config_dir, user_cache_dir
 
+from . import __version__
 from .constants import ARCHIVE_EXTENSIONS as DEFAULT_ARCHIVE_EXTENSIONS
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class Config:
         "network": {
             "retries": 3,
             "retry_delay": 1,
-            "user_agent": "purl2notices/0.1.0",
+            "user_agent": f"purl2notices/{__version__}",
         }
     }
     
