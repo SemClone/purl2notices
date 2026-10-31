@@ -129,6 +129,22 @@ class TestOfflineFlag:
         assert result.exit_code == 1
         assert '--offline' in result.output
 
+    def test_offline_set_in_a_config_file_refuses_a_purl_too(self, tmp_path):
+        """The refusal follows the effective setting, not only the flag: a
+        config file with general.offline set and no --offline still names a
+        registry package that nothing local can answer."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("general:\n  offline: true\n", encoding="utf-8")
+
+        result = CliRunner().invoke(main, [
+            '--input', 'pkg:npm/express@4.18.0',
+            '--config', str(config_file),
+            '--no-cache',
+        ])
+
+        assert result.exit_code == 1
+        assert 'offline' in result.output
+
     def test_a_cache_input_is_still_allowed(self, tmp_path):
         """A cache file is local, so offline mode has no reason to refuse it."""
         from purl2notices.constants import CACHE_VERSION, CACHE_VERSION_PROPERTY

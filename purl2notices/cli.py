@@ -273,6 +273,9 @@ def main(
         config_obj.set("general.continue_on_error", True)
     if offline:
         config_obj.set("general.offline", True)
+    # A config file can turn offline mode on without the flag, and every check
+    # below has to follow the setting the scan will actually run with.
+    offline = bool(config_obj.get("general.offline", False))
     if exclude:
         existing = config_obj.get("scanning.exclude_patterns", [])
         existing.extend(list(exclude))
@@ -319,7 +322,8 @@ def main(
         click.echo(
             f"Error: --offline cannot process {mode} input, which needs to "
             "download packages. Scan the unpacked sources or an archive "
-            "instead (-i <directory>), or drop --offline.",
+            "instead (-i <directory>), or drop --offline (and general.offline "
+            "in the config file).",
             err=True
         )
         sys.exit(1)
