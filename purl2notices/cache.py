@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from . import __version__
 from .models import Package, License, Copyright, ProcessingStatus
 from .overrides import OverrideManager
 from .constants import (
@@ -341,7 +342,7 @@ class CacheManager:
                     {
                         "vendor": "oscarvalenzuelab",
                         "name": "purl2notices",
-                        "version": "0.1.0"
+                        "version": __version__
                     }
                 ],
                 "properties": [

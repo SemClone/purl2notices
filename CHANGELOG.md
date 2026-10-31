@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- The cache BOM records the version that actually wrote it (#44). The producing
+  tool was the literal `0.1.0` while the package shipped `2.0.0`, so the one
+  field whose purpose is provenance gave a false answer in every cache file
+  ever written.
+- `purl2notices --version` and the network User-Agent report the real version
+  too. `__version__` was its own stale literal at `1.3.0`, and the User-Agent
+  was pinned at `0.1.0`, so reading the BOM off either would have moved the
+  wrong answer rather than fixed it.
+
+### Changed
+- The version is declared once, in `purl2notices/__init__.py`. `pyproject.toml`
+  reads it from there, so a release bumps one line and nothing in the package
+  can disagree with it. A release still has to update the changelog heading:
+  that is what the version is checked against, since deriving everything from
+  one literal means nothing in the code can contradict a wrong one.
+
 ## [2.0.0] - 2026-09-01
 
 ### Fixed
