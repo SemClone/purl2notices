@@ -1,5 +1,6 @@
 """Configuration management for purl2notices."""
 
+import copy
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -41,6 +42,8 @@ class Config:
             "parallel_workers": 4,
             "timeout": 30,
             "continue_on_error": True,
+            # Pure local scanning: no registry lookups and no downloads.
+            "offline": False,
         },
         "scanning": {
             "recursive": True,
@@ -79,7 +82,11 @@ class Config:
     
     def __init__(self, config_file: Optional[Path] = None):
         """Initialize configuration."""
-        self.config = self.DEFAULT_CONFIG.copy()
+        # A shallow copy shares every nested dict and list with the class
+        # attribute, so one Config calling set() changed the defaults for every
+        # Config built afterwards in the same process -- including the lists
+        # that the CLI appends exclude patterns to.
+        self.config = copy.deepcopy(self.DEFAULT_CONFIG)
         self.config_file = config_file
         
         if config_file and config_file.exists():

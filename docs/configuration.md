@@ -13,6 +13,8 @@ general:
   verbose: 1
   parallel_workers: 8
   timeout: 60
+  # Local scanning only: no registry lookups and no package downloads.
+  offline: false
 
 scanning:
   recursive: true
@@ -182,6 +184,7 @@ CycloneDX JSON format for intermediate storage:
 | `-c, --cache` | Cache file location | None |
 | `--no-cache` | Disable caching | False |
 | `--merge-cache` | Additional cache files to merge | None |
+| `--offline` | Local scanning only: no lookups, no downloads | False |
 
 ### Scanning Options
 

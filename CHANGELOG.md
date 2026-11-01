@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--offline` scans a directory from local files only: no registry lookups and
+  no package downloads (#4). Each detected package is read from the directory
+  its metadata file sits in, so the LICENSE and NOTICE files and the copyright
+  headers it ships are what the notices are built from, and archives are read
+  in place rather than re-fetched. For air-gapped machines and CI without
+  egress.
+- A bare PURL or a KissBOM file names packages in a registry and nothing local,
+  so `--offline` refuses those inputs. Accepting them would report every
+  package as unavailable and still write a notices file, which reads like a
+  project with nothing to declare.
+
 ### Fixed
 - The cache BOM records the version that actually wrote it (#44). The producing
   tool was the literal `0.1.0` while the package shipped `2.0.0`, so the one
@@ -16,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   too. `__version__` was its own stale literal at `1.3.0`, and the User-Agent
   was pinned at `0.1.0`, so reading the BOM off either would have moved the
   wrong answer rather than fixed it.
+- Two `Config` objects in one process no longer share their defaults. The
+  nested dicts and lists came from a shallow copy of the class attribute, so
+  one config calling `set()`, or the CLI appending an exclude pattern, changed
+  the defaults for every config built afterwards.
 
 ### Changed
 - The version is declared once, in `purl2notices/__init__.py`. `pyproject.toml`

@@ -34,9 +34,16 @@ class CombinedExtractor(BaseExtractor):
     5. Combine results
     """
     
-    def __init__(self, cache_dir: Optional[Path] = None):
-        """Initialize combined extractor."""
+    def __init__(self, cache_dir: Optional[Path] = None, offline: bool = False):
+        """Initialize combined extractor.
+
+        Args:
+            cache_dir: where downloaded packages are kept.
+            offline: refuse every network call. A PURL cannot be answered
+                without one, so offline extraction works from local paths only.
+        """
         super().__init__()
+        self.offline = offline
         self.purl2src = Purl2SrcExtractor()
         self.upmex = UpmexExtractor()
         self.osslili = OssliliExtractor()
@@ -52,6 +59,17 @@ class CombinedExtractor(BaseExtractor):
         """Extract information from a PURL using all available sources."""
         # Normalize PURL - remove trailing slashes
         purl = purl.rstrip('/')
+
+        # Answering a PURL means resolving it to a download URL and fetching
+        # the archive. Both are network calls, so offline mode declines here
+        # rather than failing partway through with a connection error that
+        # reads like the package does not exist.
+        if self.offline:
+            return ExtractionResult(
+                success=False,
+                errors=[f"offline mode: not downloading {purl}"],
+                source=ExtractionSource.PURL2SRC
+            )
         
         errors = []
         all_licenses = []
@@ -266,6 +284,13 @@ class CombinedExtractor(BaseExtractor):
     
     async def _download_package(self, url: str, purl: str) -> Optional[Path]:
         """Download a package from URL."""
+        # Second guard. extract_from_purl is the only caller today, but a
+        # download is the one thing in here that must not happen offline, and
+        # a guard at the door is cheaper than remembering every route to it.
+        if self.offline:
+            logger.debug(f"Offline mode: not downloading {url}")
+            return None
+
         try:
             # Create filename from PURL
             from packageurl import PackageURL

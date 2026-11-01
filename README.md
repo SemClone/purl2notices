@@ -61,6 +61,9 @@ purl2notices -i packages.txt -o NOTICE.html -f html --template custom.jinja2
 
 # Apply license overrides
 purl2notices -i packages.txt --overrides custom.json -o NOTICE.txt
+
+# Local scanning only, no network
+purl2notices -i ./node_modules --offline -o NOTICE.txt
 ```
 
 ### Python API
@@ -132,6 +135,23 @@ purl2notices -i ./src --recursive --include "*.py" -o NOTICE.txt
 # Exclude patterns
 purl2notices -i ./project --recursive --exclude "test/*" -o NOTICE.txt
 ```
+
+### Offline Scanning
+
+`--offline` makes a run read what is on disk and nothing else: no registry
+lookups and no package downloads.
+
+```bash
+purl2notices -i ./node_modules --offline -o NOTICE.txt
+```
+
+Each detected package is read from the directory its metadata file sits in, so
+the LICENSE and NOTICE files and the copyright headers it ships are what the
+notices are built from. Archives are read in place.
+
+A bare PURL or a KissBOM file names packages in a registry and nothing local,
+so `--offline` refuses those inputs rather than reporting every package as
+unavailable. Directories, archives and cache files all work offline.
 
 ### Cache Files
 

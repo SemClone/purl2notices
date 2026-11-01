@@ -76,6 +76,11 @@ def setup_logging(verbose: int) -> None:
     help='Disable caching'
 )
 @click.option(
+    '--offline',
+    is_flag=True,
+    help='Local scanning only: no registry lookups and no package downloads'
+)
+@click.option(
     '--template', '-t',
     type=click.Path(exists=True, path_type=Path),
     help='Custom template file'
@@ -159,6 +164,7 @@ def main(
     format: str,
     cache: Optional[str],
     no_cache: bool,
+    offline: bool,
     template: Optional[Path],
     config: Optional[Path],
     verbose: int,
@@ -197,6 +203,9 @@ def main(
         
         # Merge multiple cache files
         purl2notices -i cache1.json --merge-cache cache2.json --merge-cache cache3.json -o NOTICE.txt
+        
+        # Scan a directory without touching the network
+        purl2notices -i ./node_modules --offline -o NOTICE.txt
     """
     # Handle shell completion
     if install_completion:
@@ -262,6 +271,11 @@ def main(
         config_obj.set("general.parallel_workers", parallel)
     if continue_on_error:
         config_obj.set("general.continue_on_error", True)
+    if offline:
+        config_obj.set("general.offline", True)
+    # A config file can turn offline mode on without the flag, and every check
+    # below has to follow the setting the scan will actually run with.
+    offline = bool(config_obj.get("general.offline", False))
     if exclude:
         existing = config_obj.get("scanning.exclude_patterns", [])
         existing.extend(list(exclude))
@@ -299,6 +313,20 @@ def main(
         else:
             click.echo("Error: No input provided", err=True)
             sys.exit(1)
+    
+    # A PURL names a package in a registry and nothing else; answering one
+    # means a lookup and a download. Accepting these modes offline would
+    # report every package as unavailable and still write a notices file,
+    # which reads like a project with nothing to declare.
+    if offline and mode in ('single', 'kissbom'):
+        click.echo(
+            f"Error: --offline cannot process {mode} input, which needs to "
+            "download packages. Scan the unpacked sources or an archive "
+            "instead (-i <directory>), or drop --offline (and general.offline "
+            "in the config file).",
+            err=True
+        )
+        sys.exit(1)
     
     # Initialize processor
     processor = Purl2Notices(config_obj)

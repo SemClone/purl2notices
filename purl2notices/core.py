@@ -28,11 +28,13 @@ class Purl2Notices:
     def __init__(self, config: Optional[Config] = None):
         """Initialize processor."""
         self.config = config or Config()
+        self.offline = bool(self.config.get("general.offline", False))
         
         # Initialize components
         self.detector_registry = DetectorRegistry()
         self.extractor = CombinedExtractor(
-            cache_dir=self.config.cache_dir / "downloads"
+            cache_dir=self.config.cache_dir / "downloads",
+            offline=self.offline
         )
         self.cache_manager = None
         self.formatter = NoticeFormatter()
@@ -133,24 +135,40 @@ class Purl2Notices:
         purls_to_process = []
         detection_metadata_map = {}  # Map PURLs to their detection metadata
         paths_to_process = []
+        # Archives read under their detected coordinates, so the archive sweep
+        # below does not report the same file a second time.
+        archives_claimed = set()
 
         # Separate detected packages by whether they have PURLs
         for detection in detection_results:
-            if detection.purl:
+            if detection.purl and not self.offline:
                 purls_to_process.append(detection.purl)
                 # Store detection metadata for later use
                 detection_metadata_map[detection.purl] = detection.metadata
-            else:
-                # Create package from detection
-                package = self._detection_to_package(detection)
+                continue
 
-                # Special handling for Chef cookbooks - process the cookbook directory
-                if detection.metadata.get('type') == 'chef_cookbook' and detection.metadata.get('cookbook_dir'):
-                    paths_to_process.append((Path(detection.metadata['cookbook_dir']), package))
-                elif detection.metadata.get('source_file'):
-                    paths_to_process.append((Path(detection.metadata['source_file']), package))
-                else:
+            # Create package from detection
+            package = self._detection_to_package(detection)
+
+            if detection.purl:
+                # Offline: the package was detected on disk, so read it there
+                # instead of downloading the copy the registry would serve.
+                target = self._local_source_for(detection, directory)
+                if target is None:
                     packages.append(package)
+                    continue
+                if detection.metadata.get('source_archive'):
+                    archives_claimed.add(self._resolved(target))
+                paths_to_process.append((target, package))
+                continue
+
+            # Special handling for Chef cookbooks - process the cookbook directory
+            if detection.metadata.get('type') == 'chef_cookbook' and detection.metadata.get('cookbook_dir'):
+                paths_to_process.append((Path(detection.metadata['cookbook_dir']), package))
+            elif detection.metadata.get('source_file'):
+                paths_to_process.append((Path(detection.metadata['source_file']), package))
+            else:
+                packages.append(package)
 
         # Process packages with PURLs
         if purls_to_process:
@@ -193,7 +211,10 @@ class Purl2Notices:
         # Find and process archive files separately for proper attribution
         # Use the max_depth from config or a reasonable default
         max_depth = self.config.get("scanning.max_depth", 10)
-        archive_files = self._find_archive_files(directory, max_depth=max_depth)
+        archive_files = [
+            archive for archive in self._find_archive_files(directory, max_depth=max_depth)
+            if self._resolved(archive) not in archives_claimed
+        ]
         if archive_files:
             logger.info(f"Processing {len(archive_files)} archive files")
             for archive in archive_files:
@@ -264,6 +285,48 @@ class Purl2Notices:
             self._apply_declared_license_fallback(package)
 
         return packages
+
+    @staticmethod
+    def _resolved(path: Path) -> str:
+        """A comparable form of a path that may not exist."""
+        try:
+            return str(Path(path).resolve())
+        except OSError:
+            return str(path)
+
+    def _local_source_for(self, detection: DetectorResult,
+                          directory: Path) -> Optional[Path]:
+        """The local path to read in place of downloading a detected package.
+
+        A metadata file names its package but rarely holds its terms: the
+        LICENSE file and the copyright headers sit beside it. So what gets read
+        is the directory the metadata file lives in, which is what gives an
+        offline scan the same material osslili would see.
+
+        The exception is a metadata file sitting at the top of the tree being
+        scanned. Reading that directory would hand one package every license in
+        the tree, including those of its dependencies, and the whole-tree source
+        scan at the end of process_directory already covers it.
+
+        Returns None when the detection names nothing local, which leaves the
+        package reported from its detected metadata alone.
+        """
+        metadata = detection.metadata or {}
+
+        # A cookbook or an archive is already the thing to read.
+        for key in ('cookbook_dir', 'source_archive'):
+            if metadata.get(key):
+                return Path(metadata[key])
+
+        source_file = metadata.get('source_file')
+        if not source_file:
+            return None
+
+        path = Path(source_file)
+        parent = path.parent
+        if self._resolved(parent) == self._resolved(directory):
+            return path
+        return parent
 
     @staticmethod
     def _declared_license_id(declared: Any) -> Optional[str]:
